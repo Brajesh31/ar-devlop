@@ -1,11 +1,11 @@
 /**
  * Authentication Hook
  * Manages user authentication state and provides login/logout functions
+ * * STATUS: Connected to PHP Backend (login.php & register.php)
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { authService, AuthUser, LoginCredentials, SignupData } from '@/services/api';
-import { useNavigate } from 'react-router-dom';
+import { authService, AuthUser, PublicLoginCredentials } from '@/services/api';
 import { useToast } from '@/hooks/use-toast';
 
 const AUTH_STORAGE_KEY = 'bharatxr_auth_user';
@@ -16,7 +16,7 @@ export const useAuth = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const { toast } = useToast();
 
-  // Load user from storage on mount
+  // 1. Load user from local storage on mount
   useEffect(() => {
     const storedUser = localStorage.getItem(AUTH_STORAGE_KEY);
     if (storedUser) {
@@ -31,23 +31,27 @@ export const useAuth = () => {
     setIsLoading(false);
   }, []);
 
-  const login = useCallback(async (credentials: LoginCredentials) => {
+  // 2. Login Function
+  const login = useCallback(async (credentials: PublicLoginCredentials) => {
     setIsLoading(true);
     try {
+      // Call public/api/auth/login.php
       const result = await authService.login(credentials);
-      
-      if (result.status === 'success' && result.data?.user) {
-        const authUser = result.data.user;
+
+      // Backend returns: { status: 'success', user: {...}, redirect: '...' }
+      if (result.status === 'success' && result.user) {
+        const authUser: AuthUser = result.user;
+
         setUser(authUser);
         setIsAuthenticated(true);
         localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(authUser));
-        
+
         toast({
           title: 'Login Successful',
           description: `Welcome back, ${authUser.name}!`,
         });
-        
-        return { success: true, user: authUser };
+
+        return { success: true, user: authUser, redirect: result.redirect };
       } else {
         toast({
           title: 'Login Failed',
@@ -69,21 +73,24 @@ export const useAuth = () => {
     }
   }, [toast]);
 
-  const signup = useCallback(async (data: SignupData) => {
+  // 3. Signup Function
+  const signup = useCallback(async (data: any) => {
     setIsLoading(true);
     try {
-      const result = await authService.signup(data);
-      
+      // Call public/api/auth/register.php
+      // Note: We use 'register' here as defined in your api.ts publicService
+      const result = await authService.register(data);
+
       if (result.status === 'success') {
         toast({
           title: 'Account Created',
-          description: 'Please login with your credentials.',
+          description: 'Registration successful! Please login.',
         });
-        return { success: true, userId: result.data?.user_id };
+        return { success: true, userId: result.user_id };
       } else {
         toast({
-          title: 'Signup Failed',
-          description: result.message || 'Registration failed',
+          title: 'Registration Failed',
+          description: result.message || 'Could not create account',
           variant: 'destructive',
         });
         return { success: false, message: result.message };
@@ -101,6 +108,7 @@ export const useAuth = () => {
     }
   }, [toast]);
 
+  // 4. Logout Function
   const logout = useCallback(async () => {
     try {
       await authService.logout();
@@ -117,8 +125,10 @@ export const useAuth = () => {
     }
   }, [toast]);
 
+  // 5. Role Helpers
   const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
-  const isStudent = user?.role === 'student';
+  const isStudent = ['school', 'undergraduate', 'graduate'].includes(user?.role || '');
+  const isProfessional = user?.role === 'professional';
 
   return {
     user,
@@ -126,13 +136,14 @@ export const useAuth = () => {
     isAuthenticated,
     isAdmin,
     isStudent,
+    isProfessional,
     login,
     signup,
     logout,
   };
 };
 
-// Auth context for global state (optional usage)
+// Global Helper to get user without hook (if needed for non-react logic)
 export const getStoredUser = (): AuthUser | null => {
   const stored = localStorage.getItem(AUTH_STORAGE_KEY);
   if (stored) {
@@ -143,8 +154,4 @@ export const getStoredUser = (): AuthUser | null => {
     }
   }
   return null;
-};
-
-export const clearStoredUser = () => {
-  localStorage.removeItem(AUTH_STORAGE_KEY);
 };

@@ -24,6 +24,8 @@ const api = axios.create({
 // ============================================================================
 
 interface ApiResponse<T = any> {
+  user_id: any;
+  redirect: any;
   status: 'success' | 'error';
   data?: T;       // Standard data payload
   user?: T;       // specific to login endpoint
@@ -33,8 +35,15 @@ interface ApiResponse<T = any> {
   url?: string;   // specific to upload
 }
 
+// Admin Login Credentials (Email only)
 export interface LoginCredentials {
   email: string;
+  password: string;
+}
+
+// Student/Public Login Credentials (Email or Phone)
+export interface PublicLoginCredentials {
+  identifier: string;
   password: string;
 }
 
@@ -44,6 +53,7 @@ export interface AuthUser {
   role: string;
   name: string;
   is_permanent?: boolean;
+  institution?: string; // Added to support student dashboard
 }
 
 // ============================================================================
@@ -79,6 +89,7 @@ async function apiRequest<T>(
 // ============================================================================
 
 export const authService = {
+  // --- ADMIN AUTH ---
   adminLogin: async (credentials: LoginCredentials) => {
     return apiRequest<AuthUser>('/admin/auth/login.php', {
       method: 'POST',
@@ -102,6 +113,24 @@ export const authService = {
 
   logout: async () => {
     return apiRequest('/admin/auth/logout.php', { method: 'POST' });
+  },
+
+  // --- STUDENT / PUBLIC AUTH (NEW) ---
+
+  // Login with Identifier (Email/Phone) & Password
+  login: async (credentials: PublicLoginCredentials) => {
+    return apiRequest<any>('/auth/login.php', {
+      method: 'POST',
+      data: credentials,
+    });
+  },
+
+  // Register with full profile data
+  register: async (data: any) => {
+    return apiRequest<any>('/auth/register.php', {
+      method: 'POST',
+      data: data,
+    });
   },
 };
 
@@ -134,10 +163,7 @@ export const adminService = {
 
     // Direct Axios call to handle multipart/form-data correctly
     try {
-      // CHANGE THIS LINE: Remove the headers object completely.
-      // Axios will automatically set the correct 'multipart/form-data; boundary=...' header.
       const response = await axios.post(`${API_CONFIG.baseUrl}/admin/media/upload.php`, formData);
-
       return response.data;
     } catch (error: any) {
       console.error("Upload Error:", error);
