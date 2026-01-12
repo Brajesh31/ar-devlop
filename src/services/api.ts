@@ -134,9 +134,10 @@ export const adminService = {
 
     // Direct Axios call to handle multipart/form-data correctly
     try {
-      const response = await axios.post(`${API_CONFIG.baseUrl}/admin/media/upload.php`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
+      // CHANGE THIS LINE: Remove the headers object completely.
+      // Axios will automatically set the correct 'multipart/form-data; boundary=...' header.
+      const response = await axios.post(`${API_CONFIG.baseUrl}/admin/media/upload.php`, formData);
+
       return response.data;
     } catch (error: any) {
       console.error("Upload Error:", error);
