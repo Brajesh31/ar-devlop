@@ -79,7 +79,11 @@ export const SignupForm = ({ onLogin }: SignupFormProps) => {
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -20 }}
             transition={{ duration: 0.3 }}
-            className="w-full h-full overflow-y-auto pr-2 custom-scrollbar max-h-[600px]"
+            // === SCROLL LOGIC FIXED HERE ===
+            // Mobile: w-full (Grows with content)
+            // Desktop (lg): Restrict height to 600px, enable scroll, add right padding
+            // 'scrollbar-thin' is optional if you have the plugin, otherwise overflow-y-auto handles it.
+            className="w-full lg:max-h-[600px] lg:overflow-y-auto lg:pr-2"
         >
             <div className="mb-6">
                 <h2 className="text-3xl font-bold text-slate-900">Create Account</h2>
@@ -99,7 +103,7 @@ export const SignupForm = ({ onLogin }: SignupFormProps) => {
                         )} />
                     </div>
 
-                    {/* Middle Name (Optional) */}
+                    {/* Middle Name */}
                     <FormField control={form.control} name="middle_name" render={({ field }) => (
                         <FormItem><FormLabel>Middle Name <span className="text-gray-400 text-xs">(Optional)</span></FormLabel><FormControl><Input placeholder="" className="bg-white/80" {...field} /></FormControl><FormMessage /></FormItem>
                     )} />
@@ -118,7 +122,7 @@ export const SignupForm = ({ onLogin }: SignupFormProps) => {
                         <FormItem><FormLabel>Password</FormLabel><FormControl><Input type="password" placeholder="Create Password" className="bg-white/80" {...field} /></FormControl><FormMessage /></FormItem>
                     )} />
 
-                    {/* Social Links Row (Optional) */}
+                    {/* Social Links */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <FormField control={form.control} name="linkedin_url" render={({ field }) => (
                             <FormItem>
@@ -136,7 +140,7 @@ export const SignupForm = ({ onLogin }: SignupFormProps) => {
                         )} />
                     </div>
 
-                    {/* User Type Selection */}
+                    {/* User Type */}
                     <div className="pt-2">
                         <FormField control={form.control} name="user_type" render={({ field }) => (
                             <FormItem>
@@ -159,7 +163,7 @@ export const SignupForm = ({ onLogin }: SignupFormProps) => {
                         )} />
                     </div>
 
-                    {/* DYNAMIC FIELDS */}
+                    {/* Dynamic Fields */}
                     <AnimatePresence mode='wait'>
                         {userType === 'school' && (
                             <motion.div
