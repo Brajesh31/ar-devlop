@@ -3,6 +3,11 @@
 
 // 1. CONFIGURATION & HEADERS
 // --------------------------------------------------
+$allowed_origins = [
+    "http://localhost:5173",
+    "https://bharatxr.edtech-community.com",
+    "https://bharatxr.co"
+];
 
 if (isset($_SERVER['HTTP_ORIGIN']) && in_array($_SERVER['HTTP_ORIGIN'], $allowed_origins)) {
     header("Access-Control-Allow-Origin: {$_SERVER['HTTP_ORIGIN']}");
@@ -45,6 +50,8 @@ try {
     $phone = substr($phoneRaw, -10);
     $password = $input['password'];
     $userType = $input['user_type'];
+
+    // FIX: Match the frontend field names (linkedin_url, github_url)
     $linkedin = $input['linkedin_url'] ?? null;
     $github = $input['github_url'] ?? null;
 
@@ -58,39 +65,22 @@ try {
         sendError("User with this Email or Phone already exists.", 409);
     }
 
-    // 4. STEP 1: CREATE USER (The Anchor)
-    // --------------------------------------------------
-    // We execute this FIRST. No Transaction.
-    $passHash = password_hash($password, PASSWORD_BCRYPT);
+    // =================================================================
+    // 4. PHASE 1: PREPARE DIRECTORY & TABLES (DDL)
+    // Runs BEFORE transaction to avoid "Implicit Commit" crashes
+    // =================================================================
 
-    $sqlUser = "INSERT INTO users (first_name, middle_name, last_name, email, phone, password_hash, user_type, linkedin_url, github_url)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
-
-    $stmtUser = $conn->prepare($sqlUser);
-    if (!$stmtUser->execute([$firstName, $middleName, $lastName, $email, $phone, $passHash, $userType, $linkedin, $github])) {
-        throw new Exception("Failed to insert user into database.");
-    }
-
-    $userId = $conn->lastInsertId();
-
-    // 5. STEP 2: HANDLE DIRECTORIES & TABLES (Sequential Logic)
-    // --------------------------------------------------
-
-    // Helper: Create Table (DDL)
     function ensureTableExists($conn, $tableName, $type) {
         $commonCols = "
             id INT PRIMARY KEY AUTO_INCREMENT,
             user_id INT NOT NULL,
             first_name VARCHAR(50),
             last_name VARCHAR(50),
-
-            -- Extended Profile Data
             profile_pic_url VARCHAR(255) NULL,
             about_me TEXT NULL,
             skills TEXT NULL,
             education_details TEXT NULL,
             achievements TEXT NULL,
-
             joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
         ";
@@ -103,8 +93,7 @@ try {
         $conn->exec($sql);
     }
 
-    // Helper: Process Directory Entry
-    function processDirectory($conn, $name, $type) {
+    function prepareInstitution($conn, $name, $type) {
         $cleanName = strtolower(preg_replace('/[^a-zA-Z0-9]/', '_', trim($name)));
 
         if ($type === 'school') {
@@ -121,41 +110,66 @@ try {
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
         if ($row) {
-            // Exists: Just increment count
-            $conn->prepare("UPDATE $dirTable SET student_count = student_count + 1 WHERE $idCol = ?")->execute([$row[$idCol]]);
-
-            // Ensure table physically exists (Safety Check)
+            // Found: Ensure table exists physically
             ensureTableExists($conn, $row['dynamic_table_name'], $type);
-
-            return ['id' => $row[$idCol], 'tableName' => $row['dynamic_table_name']];
+            return ['id' => $row[$idCol], 'tableName' => $row['dynamic_table_name'], 'isNew' => false];
         } else {
-            // New: Insert to directory
-            $conn->prepare("INSERT INTO $dirTable ($nameCol, student_count) VALUES (?, 1)")->execute([trim($name)]);
+            // New: We need to insert directory entry and create table
+            // We do directory insert here to get the ID for table name
+            $stmtIns = $conn->prepare("INSERT INTO $dirTable ($nameCol, student_count) VALUES (?, 0)");
+            $stmtIns->execute([trim($name)]);
             $newId = $conn->lastInsertId();
 
-            // Generate Table Name
             $tableName = "{$prefix}_{$newId}_{$cleanName}";
             if (strlen($tableName) > 60) $tableName = substr($tableName, 0, 60);
 
-            // Save Table Name back to Directory
+            // Update with table name
             $conn->prepare("UPDATE $dirTable SET dynamic_table_name = ? WHERE $idCol = ?")->execute([$tableName, $newId]);
 
             // Create Physical Table
             ensureTableExists($conn, $tableName, $type);
 
-            return ['id' => $newId, 'tableName' => $tableName];
+            return ['id' => $newId, 'tableName' => $tableName, 'isNew' => true];
         }
     }
 
-    // 6. STEP 3: INSERT PROFILE DATA
-    // --------------------------------------------------
-
+    // -- RUN PREPARATION LOGIC --
+    $meta = null;
     if ($userType === 'school') {
-        if (empty($input['school_name'])) throw new Exception("School Name required");
-        $classGrade = $input['class_grade'] ?? 'N/A';
+        if (empty($input['school_name'])) sendError("School Name required");
+        $meta = prepareInstitution($conn, $input['school_name'], 'school');
+    } elseif ($userType === 'undergraduate' || $userType === 'graduate') {
+        if (empty($input['college_name'])) sendError("College Name required");
+        $meta = prepareInstitution($conn, $input['college_name'], $userType);
+    }
 
-        // 1. Get Directory Info
-        $meta = processDirectory($conn, $input['school_name'], 'school');
+    // =================================================================
+    // 5. PHASE 2: INSERT USER & DATA (ATOMIC TRANSACTION)
+    // =================================================================
+    $conn->beginTransaction();
+
+    // A. Create User
+    $passHash = password_hash($password, PASSWORD_BCRYPT);
+    $sqlUser = "INSERT INTO users (first_name, middle_name, last_name, email, phone, password_hash, user_type, linkedin_url, github_url)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+
+    $stmtUser = $conn->prepare($sqlUser);
+    if (!$stmtUser->execute([$firstName, $middleName, $lastName, $email, $phone, $passHash, $userType, $linkedin, $github])) {
+        throw new Exception("Failed to insert user.");
+    }
+    $userId = $conn->lastInsertId();
+
+    // B. Handle Profiles & Dynamic Inserts
+    if ($userType === 'school') {
+        $classGrade = $input['class_grade'] ?? '';
+
+        // 1. Increment Student Count (if existing)
+        if (!$meta['isNew']) {
+            $conn->prepare("UPDATE directory_schools SET student_count = student_count + 1 WHERE school_id = ?")->execute([$meta['id']]);
+        } else {
+            // If new, set count to 1
+            $conn->prepare("UPDATE directory_schools SET student_count = 1 WHERE school_id = ?")->execute([$meta['id']]);
+        }
 
         // 2. Link Profile
         $conn->prepare("INSERT INTO profiles_school (user_id, school_id, class_grade) VALUES (?, ?, ?)")
@@ -166,18 +180,25 @@ try {
              ->execute([$userId, $firstName, $lastName, $classGrade]);
 
     } elseif ($userType === 'undergraduate' || $userType === 'graduate') {
-        if (empty($input['college_name'])) throw new Exception("College Name required");
-
-        $meta = processDirectory($conn, $input['college_name'], $userType);
         $tableProfile = ($userType === 'undergraduate') ? 'profiles_undergrad' : 'profiles_graduate';
-        $branch = $input['branch'] ?? 'N/A';
-        $stream = $input['stream'] ?? 'N/A';
+        $dirTable = ($userType === 'undergraduate') ? 'directory_colleges_ug' : 'directory_colleges_pg';
+        $idCol = ($userType === 'undergraduate') ? 'college_id' : 'college_id';
 
-        // 1. Link Profile
+        $branch = $input['branch'] ?? '';
+        $stream = $input['stream'] ?? '';
+
+        // 1. Update Count
+        if (!$meta['isNew']) {
+            $conn->prepare("UPDATE $dirTable SET student_count = student_count + 1 WHERE $idCol = ?")->execute([$meta['id']]);
+        } else {
+            $conn->prepare("UPDATE $dirTable SET student_count = 1 WHERE $idCol = ?")->execute([$meta['id']]);
+        }
+
+        // 2. Link Profile
         $conn->prepare("INSERT INTO $tableProfile (user_id, college_id, branch, stream) VALUES (?, ?, ?, ?)")
              ->execute([$userId, $meta['id'], $branch, $stream]);
 
-        // 2. Add to Dynamic Table
+        // 3. Add to Dynamic Table
         $conn->prepare("INSERT INTO `{$meta['tableName']}` (user_id, first_name, last_name, branch, stream) VALUES (?, ?, ?, ?, ?)")
              ->execute([$userId, $firstName, $lastName, $branch, $stream]);
 
@@ -188,8 +209,8 @@ try {
              ->execute([$userId, $input['job_role']]);
     }
 
-    // 7. SUCCESS RESPONSE
-    // --------------------------------------------------
+    $conn->commit();
+
     echo json_encode([
         'status' => 'success',
         'message' => 'Registration successful',
@@ -197,10 +218,14 @@ try {
     ]);
 
 } catch (Exception $e) {
-    // Log the actual error for the admin
+    if ($conn->inTransaction()) {
+        $conn->rollBack();
+    }
+
+    // Log error to server
     error_log("REGISTER ERROR: " . $e->getMessage());
 
-    // Return specific error to frontend so you know exactly where it stopped
+    // Return specific error
     http_response_code(500);
     echo json_encode(['status' => 'error', 'message' => "Registration Failed: " . $e->getMessage()]);
 }
