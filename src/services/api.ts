@@ -1,7 +1,7 @@
 /**
  * API Service Layer
  * Connects frontend components to PHP backend APIs using Axios
- * * CURRENT STATUS: Admin Auth, Admin Events, Public Events & Registration
+ * * CURRENT STATUS: Admin Auth, Events Management, & PUBLIC ACCESS
  */
 
 import axios, { AxiosError, AxiosRequestConfig } from 'axios';
@@ -146,7 +146,7 @@ export const adminService = {
 
   // === EVENTS MANAGEMENT ===
   events: {
-    // 1. List All Events (Admin View)
+    // 1. List All Events
     list: async () => {
       return apiRequest<any[]>('/admin/events/list.php');
     },
@@ -183,27 +183,27 @@ export const adminService = {
 };
 
 // ============================================================================
-// 5. PUBLIC SERVICES
+// 5. PUBLIC SERVICES (Frontend)
 // ============================================================================
 
 export const publicService = {
   events: {
-    // 1. List Published Events (Public View)
-    list: async () => {
-      const response = await axios.get(`${API_CONFIG.baseUrl}/events/list.php`);
-      return response.data;
+    // List all published events (for Events Page)
+    getAll: async () => {
+      return apiRequest<any[]>('/events/list.php');
     },
 
-    // 2. Get Single Event Details (Public View)
-    getById: async (id: string) => {
-      const response = await axios.get(`${API_CONFIG.baseUrl}/events/get.php?id=${id}`);
-      return response.data;
+    // Get single event by ID or SLUG (for Detail Page)
+    getById: async (idOrSlug: string) => {
+      return apiRequest<any>(`/events/get.php?id=${idOrSlug}`);
     },
 
-    // 3. Register for Event (Saves to Dynamic Table)
+    // Register for an event
     register: async (data: any) => {
-      const response = await axios.post(`${API_CONFIG.baseUrl}/events/register.php`, data);
-      return response.data;
-    }
-  }
+      return apiRequest('/events/register.php', {
+        method: 'POST',
+        data: data,
+      });
+    },
+  },
 };
