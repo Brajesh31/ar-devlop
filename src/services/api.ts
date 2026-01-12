@@ -1,7 +1,7 @@
 /**
  * API Service Layer
  * Connects frontend components to PHP backend APIs using Axios
- * * CURRENT STATUS: Admin Auth, Admin Events, Public Events & Registration
+ * * STATUS: Admin Auth, Admin Events, Public Auth (Login/Register/Reset) & Events
  */
 
 import axios, { AxiosError, AxiosRequestConfig } from 'axios';
@@ -115,7 +115,7 @@ export const authService = {
     return apiRequest('/admin/auth/logout.php', { method: 'POST' });
   },
 
-  // --- STUDENT / PUBLIC AUTH (NEW) ---
+  // --- STUDENT / PUBLIC AUTH (UPDATED) ---
 
   // Login with Identifier (Email/Phone) & Password
   login: async (credentials: PublicLoginCredentials) => {
@@ -130,6 +130,22 @@ export const authService = {
     return apiRequest<any>('/auth/register.php', {
       method: 'POST',
       data: data,
+    });
+  },
+
+  // Forgot Password (Request Link) - ADDED THIS
+  forgotPassword: async (email: string) => {
+    return apiRequest<any>('/auth/forgot_password.php', {
+      method: 'POST',
+      data: { email },
+    });
+  },
+
+  // Reset Password (Submit new password with token) - ADDED THIS
+  resetPassword: async (token: string, password: string) => {
+    return apiRequest<any>('/auth/reset_password.php', {
+      method: 'POST',
+      data: { token, password },
     });
   },
 };

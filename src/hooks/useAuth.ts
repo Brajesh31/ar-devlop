@@ -1,7 +1,7 @@
 /**
  * Authentication Hook
- * Manages user authentication state and provides login/logout functions
- * * STATUS: Connected to PHP Backend (login.php & register.php)
+ * Manages user authentication state and provides unified access to all Auth APIs
+ * * STATUS: Updated for Login, Signup, Forgot Password, and Reset Password
  */
 
 import { useState, useEffect, useCallback } from 'react';
@@ -35,10 +35,8 @@ export const useAuth = () => {
   const login = useCallback(async (credentials: PublicLoginCredentials) => {
     setIsLoading(true);
     try {
-      // Call public/api/auth/login.php
       const result = await authService.login(credentials);
 
-      // Backend returns: { status: 'success', user: {...}, redirect: '...' }
       if (result.status === 'success' && result.user) {
         const authUser: AuthUser = result.user;
 
@@ -51,6 +49,7 @@ export const useAuth = () => {
           description: `Welcome back, ${authUser.name}!`,
         });
 
+        // Return result for redirect logic in UI
         return { success: true, user: authUser, redirect: result.redirect };
       } else {
         toast({
@@ -77,8 +76,6 @@ export const useAuth = () => {
   const signup = useCallback(async (data: any) => {
     setIsLoading(true);
     try {
-      // Call public/api/auth/register.php
-      // Note: We use 'register' here as defined in your api.ts publicService
       const result = await authService.register(data);
 
       if (result.status === 'success') {
@@ -108,10 +105,57 @@ export const useAuth = () => {
     }
   }, [toast]);
 
-  // 4. Logout Function
+  // 4. Forgot Password Function (NEW)
+  const forgotPassword = useCallback(async (email: string) => {
+    try {
+      const result = await authService.forgotPassword(email);
+      if (result.status === 'success') {
+        toast({
+          title: 'Email Sent',
+          description: 'Check your inbox for the reset link.',
+        });
+        return { success: true };
+      } else {
+        toast({
+          title: 'Request Failed',
+          description: result.message || 'Could not send reset link',
+          variant: 'destructive',
+        });
+        return { success: false, message: result.message };
+      }
+    } catch (error) {
+      return { success: false, message: 'Network error' };
+    }
+  }, [toast]);
+
+  // 5. Reset Password Function (NEW)
+  const resetPassword = useCallback(async (token: string, password: string) => {
+    try {
+      const result = await authService.resetPassword(token, password);
+      if (result.status === 'success') {
+        toast({
+          title: 'Password Reset',
+          description: 'Your password has been updated successfully.',
+        });
+        return { success: true };
+      } else {
+        toast({
+          title: 'Reset Failed',
+          description: result.message || 'Could not reset password',
+          variant: 'destructive',
+        });
+        return { success: false, message: result.message };
+      }
+    } catch (error) {
+      return { success: false, message: 'Network error' };
+    }
+  }, [toast]);
+
+  // 6. Logout Function
   const logout = useCallback(async () => {
     try {
-      await authService.logout();
+      // Optional: Call backend logout if needed
+      // await authService.logout();
     } catch (error) {
       console.error('Logout error:', error);
     } finally {
@@ -125,7 +169,7 @@ export const useAuth = () => {
     }
   }, [toast]);
 
-  // 5. Role Helpers
+  // Role Helpers
   const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
   const isStudent = ['school', 'undergraduate', 'graduate'].includes(user?.role || '');
   const isProfessional = user?.role === 'professional';
@@ -140,10 +184,11 @@ export const useAuth = () => {
     login,
     signup,
     logout,
+    forgotPassword, // Exposed new method
+    resetPassword,  // Exposed new method
   };
 };
 
-// Global Helper to get user without hook (if needed for non-react logic)
 export const getStoredUser = (): AuthUser | null => {
   const stored = localStorage.getItem(AUTH_STORAGE_KEY);
   if (stored) {
