@@ -1,7 +1,7 @@
 <?php
 // public/api/admin/events/create.php
 
-// 1. SILENCE OUTPUT (Captures stray warnings)
+// 1. SILENCE OUTPUT
 ob_start();
 
 // 2. Logging Setup
@@ -42,16 +42,13 @@ try {
     // --- TRANSACTION START ---
     $conn->beginTransaction();
 
-    // 5. Generate or Sanitize Slug (UPDATED LOGIC)
+    // 5. Generate or Sanitize Slug
     if (!empty($data->slug)) {
-        // Case A: User provided a custom slug -> Sanitize it
         $slug = strtolower(trim(preg_replace('/[^A-Za-z0-9-]+/', '-', $data->slug)));
     } else {
-        // Case B: No slug provided -> Auto-generate from Title + Timestamp
         $slug = strtolower(trim(preg_replace('/[^A-Za-z0-9-]+/', '-', $data->title))) . '-' . time();
     }
 
-    // Safety check: ensure slug isn't empty after sanitization
     if (empty($slug)) {
         $slug = 'event-' . time();
     }
@@ -84,7 +81,7 @@ try {
     $stmt->execute([
         ':title' => $data->title,
         ':subtitle' => $data->subtitle ?? '',
-        ':slug' => $slug, // Uses the logic above
+        ':slug' => $slug,
         ':desc' => $data->description ?? '',
         ':long_desc' => $data->long_description ?? '',
         ':type' => $data->event_type ?? 'workshop',
@@ -107,17 +104,18 @@ try {
 
     $eventId = $conn->lastInsertId();
 
-    // --- CRITICAL FIX: COMMIT NOW ---
+    // --- CRITICAL: COMMIT NOW ---
+    // The Event MUST exist in the DB before we can link the child table to it.
     $conn->commit();
     // --- TRANSACTION END ---
 
 
-    // 7. Create Table (Using the safe slug in the name)
+    // 7. Create Dynamic Table with Relation to Events
     $safe_slug = preg_replace('/[^a-zA-Z0-9_]/', '', str_replace('-', '_', $slug));
     $tableName = "event_{$eventId}_{$safe_slug}";
 
-    // === NEW: Define Foreign Key Constraint Name ===
-    $constraintName = "fk_ev{$eventId}_uid";
+    // Unique name for the constraint to avoid conflicts
+    $constraintName = "fk_evt_{$eventId}_parent";
 
     $tableSql = "CREATE TABLE IF NOT EXISTS $tableName (
         reg_id INT PRIMARY KEY AUTO_INCREMENT,
@@ -131,20 +129,26 @@ try {
         organization_name VARCHAR(255) NOT NULL,
         job_title VARCHAR(150) NOT NULL,
         user_id INT NULL,
+
+        -- === NEW: Link Column ===
+        -- We store the event_id in every row to create the physical link
+        event_id INT NOT NULL DEFAULT $eventId,
+
         status ENUM('registered','attended','cancelled') DEFAULT 'registered',
         registered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
-        -- === RELATION SETUP ===
+        -- === NEW: Relation Configuration ===
+        -- This connects this table to the main 'events' table
         CONSTRAINT $constraintName
-            FOREIGN KEY (user_id)
-            REFERENCES students(user_id)
-            ON DELETE SET NULL
+            FOREIGN KEY (event_id)
+            REFERENCES events(event_id)
+            ON DELETE CASCADE
             ON UPDATE CASCADE
-    ) ENGINE=InnoDB"; // ENGINE=InnoDB is required for Foreign Keys
+    ) ENGINE=InnoDB";
 
     $conn->exec($tableSql);
 
-    // 8. Link Table
+    // 8. Link Table Name back in Events Record
     $updateStmt = $conn->prepare("UPDATE events SET registration_table_name = :tbl WHERE event_id = :id");
     $updateStmt->execute([':tbl' => $tableName, ':id' => $eventId]);
 
@@ -159,11 +163,11 @@ try {
     ]);
 
 } catch (Exception $e) {
-    // Handling Rollback manually since commit might have passed
+    // Handling Rollback manually
     if ($conn->inTransaction()) {
         $conn->rollBack();
     } elseif ($eventId) {
-        // If transaction was committed but Table creation failed, clean up
+        // If event was committed but table creation failed, clean up
         try {
             $conn->exec("DELETE FROM events WHERE event_id = $eventId");
             if ($tableName) $conn->exec("DROP TABLE IF EXISTS $tableName");
