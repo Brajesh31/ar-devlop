@@ -88,6 +88,14 @@ try {
             user_id INT NOT NULL,
             first_name VARCHAR(50),
             last_name VARCHAR(50),
+
+            -- Extended Profile Data
+            profile_pic_url VARCHAR(255) NULL,
+            about_me TEXT NULL,
+            skills TEXT NULL,
+            education_details TEXT NULL,
+            achievements TEXT NULL,
+
             joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
         ";
@@ -198,7 +206,6 @@ try {
     error_log("REGISTER ERROR: " . $e->getMessage());
 
     // Return specific error to frontend so you know exactly where it stopped
-    // 500 = Server Error, but we give the message now
     http_response_code(500);
     echo json_encode(['status' => 'error', 'message' => "Registration Failed: " . $e->getMessage()]);
 }
