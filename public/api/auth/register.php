@@ -3,11 +3,6 @@
 
 // 1. CONFIGURATION & HEADERS
 // --------------------------------------------------
-$allowed_origins = [
-    "http://localhost:5173",
-    "https://bharatxr.edtech-community.com",
-    "https://bharatxr.co"
-];
 
 if (isset($_SERVER['HTTP_ORIGIN']) && in_array($_SERVER['HTTP_ORIGIN'], $allowed_origins)) {
     header("Access-Control-Allow-Origin: {$_SERVER['HTTP_ORIGIN']}");
@@ -65,7 +60,7 @@ try {
 
     // 4. STEP 1: CREATE USER (The Anchor)
     // --------------------------------------------------
-    // We execute this FIRST. If it fails, script stops here.
+    // We execute this FIRST. No Transaction.
     $passHash = password_hash($password, PASSWORD_BCRYPT);
 
     $sqlUser = "INSERT INTO users (first_name, middle_name, last_name, email, phone, password_hash, user_type, linkedin_url, github_url)
