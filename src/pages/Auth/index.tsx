@@ -1,21 +1,26 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useMotionValue, useSpring, useTransform } from 'framer-motion';
 import { LoginForm } from './components/LoginForm';
 import { SignupForm } from './components/SignupForm';
 import { ForgotPasswordForm } from './components/ForgotPasswordForm';
+import heroImg from '@/assets/bharat-xr-hero.png';
 
-// --- ANIMATED BACKGROUND ELEMENT ---
-const FloatingOrb = ({ className, delay }: { className: string, delay: number }) => (
+// --- AESTHETIC ASSETS (LIGHT THEME) ---
+// Clean, architectural, white/grey abstract geometric
+const GLOBAL_BG_IMAGE = "https://images.unsplash.com/photo-1544531586-fde5298cdd40?q=80&w=2940&auto=format&fit=crop";
+// --- 3D FLOATING BACKGROUND ORBS ---
+const FloatingOrb = ({ className, delay, duration = 20 }: { className: string, delay: number, duration?: number }) => (
     <motion.div
-        className={`absolute rounded-full mix-blend-multiply filter blur-3xl opacity-40 pointer-events-none ${className}`}
+        className={`absolute rounded-full mix-blend-multiply filter blur-3xl opacity-50 pointer-events-none ${className}`}
         animate={{
-            y: [0, -50, 0],
+            y: [0, -40, 0],
             x: [0, 30, 0],
-            scale: [1, 1.2, 1],
+            scale: [1, 1.1, 1],
+            rotate: [0, 45, 0],
         }}
         transition={{
-            duration: 12,
+            duration: duration,
             repeat: Infinity,
             delay: delay,
             ease: "easeInOut"
@@ -25,131 +30,159 @@ const FloatingOrb = ({ className, delay }: { className: string, delay: number })
 
 const AuthPage = () => {
     const [searchParams] = useSearchParams();
-
-    // View State: 'login' | 'signup' | 'forgot'
     const [view, setView] = useState<'login' | 'signup' | 'forgot'>('login');
 
-    // Sync URL ?mode=signup
+    // --- 3D TILT LOGIC ---
+    const ref = useRef<HTMLDivElement>(null);
+    const x = useMotionValue(0);
+    const y = useMotionValue(0);
+    const mouseXSpring = useSpring(x, { stiffness: 300, damping: 30 });
+    const mouseYSpring = useSpring(y, { stiffness: 300, damping: 30 });
+    const rotateX = useTransform(mouseYSpring, [-0.5, 0.5], ["3deg", "-3deg"]); // Reduced tilt for elegance
+    const rotateY = useTransform(mouseXSpring, [-0.5, 0.5], ["-3deg", "3deg"]);
+
+    const handleMouseMove = (e: React.MouseEvent) => {
+        if (!ref.current) return;
+        const rect = ref.current.getBoundingClientRect();
+        const xPct = (e.clientX - rect.left) / rect.width - 0.5;
+        const yPct = (e.clientY - rect.top) / rect.height - 0.5;
+        x.set(xPct);
+        y.set(yPct);
+    };
+
+    const handleMouseLeave = () => {
+        x.set(0);
+        y.set(0);
+    };
+
     useEffect(() => {
         const mode = searchParams.get('mode');
         if (mode === 'signup') setView('signup');
     }, [searchParams]);
 
     return (
-        <div className="min-h-screen w-full bg-slate-50 relative flex items-center justify-center p-4 overflow-hidden selection:bg-orange-200 selection:text-orange-900">
+        <div className="min-h-screen w-full relative flex items-center justify-center p-4 overflow-hidden selection:bg-orange-200 selection:text-orange-900 font-sans text-slate-800">
 
-            {/* --- ANIMATED BACKGROUND --- */}
-            <div className="absolute inset-0 overflow-hidden">
-                <FloatingOrb className="w-[500px] h-[500px] bg-orange-200/60 top-[-10%] left-[-10%]" delay={0} />
-                <FloatingOrb className="w-[600px] h-[600px] bg-indigo-200/50 bottom-[-10%] right-[-10%]" delay={2} />
-                <FloatingOrb className="w-[300px] h-[300px] bg-pink-200/40 top-[40%] left-[40%]" delay={4} />
+            {/* === GLOBAL BACKGROUND LAYER (LIGHT THEME) === */}
+            <div className="absolute inset-0 z-0 pointer-events-none">
+                {/* 1. Base Light Image */}
+                <img src={GLOBAL_BG_IMAGE} alt="" className="w-full h-full object-cover opacity-90" />
+
+                {/* 2. White Wash Overlay (Softens the image) */}
+                <div className="absolute inset-0 bg-white/40 mix-blend-overlay"></div>
+
+                {/* 3. Subtle Warm Gradient (Matches Orange theme without being overwhelming) */}
+                <div className="absolute inset-0 bg-gradient-to-tr from-orange-50/50 via-white/80 to-green-50/30 opacity-60"></div>
+
+                {/* 4. Noise Texture */}
+                <div className="absolute inset-0 opacity-[0.03] bg-[url('https://www.transparenttextures.com/patterns/noise.png')]"></div>
             </div>
 
-            {/* --- MAIN GLASS CARD --- */}
+            {/* === FLOATING ORBS (Vibrant against light bg) === */}
+            <div className="absolute inset-0 z-1 overflow-hidden pointer-events-none">
+                <FloatingOrb className="w-[800px] h-[800px] bg-green-200/60 top-[-30%] left-[-10%]" delay={0} duration={30} />
+                <FloatingOrb className="w-[600px] h-[600px] bg-orange-200/50 bottom-[-20%] right-[-10%]" delay={2} duration={35} />
+            </div>
+
+            {/* === 3D TILT CARD CONTAINER === */}
             <motion.div
-                layout
-                transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                className={`
-          relative z-10 w-full max-w-[1100px] 
-          bg-white/60 backdrop-blur-xl shadow-2xl shadow-slate-200/50
-          border border-white/80 rounded-[32px]
-          flex flex-col lg:flex-row overflow-hidden
-          ${view === 'signup' ? 'min-h-[750px] lg:h-[750px]' : 'min-h-[600px] lg:h-[600px]'}
-        `}
+                ref={ref}
+                onMouseMove={handleMouseMove}
+                onMouseLeave={handleMouseLeave}
+                style={{ rotateX, rotateY, transformStyle: "preserve-3d" }}
+                initial={{ opacity: 0, scale: 0.95, y: 30 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                transition={{ duration: 1.2, ease: [0.16, 1, 0.3, 1] }}
+                className="relative z-10 w-full max-w-[1200px] perspective-1000 my-8"
             >
-                {/* --- LEFT PANEL (Brand Visuals) --- */}
-                <motion.div
-                    layout
-                    className={`
-            hidden lg:flex flex-col justify-between p-12 text-white relative
-            bg-gradient-to-br from-[#FF6B35] to-[#FF3F00]
-            ${view === 'signup' ? 'w-[40%]' : 'w-[45%]'}
-            transition-all duration-700 ease-in-out
-          `}
-                >
-                    {/* Texture Overlay */}
-                    <div className="absolute inset-0 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/noise.png')] mix-blend-overlay"></div>
+                {/* Glass Card: White border, soft shadow */}
+                <div className="relative bg-white/60 backdrop-blur-2xl shadow-[0_30px_60px_-15px_rgba(0,0,0,0.1)] border border-white/50 rounded-[36px] flex flex-col lg:flex-row overflow-hidden transition-all duration-500">
 
-                    <div className="relative z-10">
-                        <Link to="/" className="inline-flex items-center gap-3 group">
-                            <div className="w-10 h-10 bg-white/90 rounded-xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
-                                <img src="/Bharatxr.png" alt="Logo" className="w-6 h-6 object-contain" />
+                    {/* --- LEFT PANEL (Brand Identity) --- */}
+                    <motion.div
+                        layout
+                        className={`
+              hidden lg:flex flex-col justify-between p-12 relative overflow-hidden
+              ${view === 'signup' ? 'w-[40%]' : 'w-[45%]'}
+              transition-all duration-700 ease-in-out
+            `}
+                    >
+                        {/* Left Panel Background: Keeps the brand feel but slightly brighter */}
+                        <div className="absolute inset-0 z-0">
+                            <img src={heroImg} alt="Community" className="w-full h-full object-cover opacity-60 grayscale contrast-125 scale-110" />
+
+                            {/* Gradient: Slate to Dark Green (Provides contrast for White Text) */}
+                            <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-[#0d2e1f] to-slate-900 mix-blend-multiply opacity-95"></div>
+
+                            {/* Bottom Glow */}
+                            <div className="absolute bottom-0 left-0 w-full h-3/4 bg-gradient-to-t from-[#FF6B35]/20 to-transparent"></div>
+
+                            {/* Noise */}
+                            <div className="absolute inset-0 opacity-[0.05] bg-[url('https://www.transparenttextures.com/patterns/noise.png')]"></div>
+                        </div>
+
+                        <div className="relative z-10 h-full flex flex-col text-white">
+                            <div className="mb-auto">
+                                <Link to="/" className="inline-block group">
+                                    <motion.img
+                                        initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
+                                        src="/Bharatxr.png" alt="BharatXR Logo"
+                                        className="w-48 h-auto object-contain drop-shadow-lg"
+                                    />
+                                </Link>
                             </div>
-                            <span className="text-2xl font-bold tracking-tight">BharatXR</span>
-                        </Link>
-                    </div>
 
-                    <div className="relative z-10 my-auto">
-                        <AnimatePresence mode="wait">
-                            <motion.div
-                                key={view}
-                                initial={{ opacity: 0, y: 20 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                exit={{ opacity: 0, y: -20 }}
-                                transition={{ duration: 0.4 }}
-                            >
-                                <h1 className="text-4xl font-extrabold leading-tight mb-4 drop-shadow-sm">
-                                    {view === 'login' && "Welcome Back."}
-                                    {view === 'signup' && "Join the Revolution."}
-                                    {view === 'forgot' && "Recover Access."}
-                                </h1>
-                                <p className="text-orange-50/90 text-lg font-medium leading-relaxed max-w-[90%]">
-                                    {view === 'login' && "Log in to access your dashboard, courses, and community."}
-                                    {view === 'signup' && "Create an account to start your journey in Extended Reality."}
-                                    {view === 'forgot' && "Enter your registered email to reset your password securely."}
-                                </p>
+                            <div className="my-12">
+                                <AnimatePresence mode="wait">
+                                    <motion.div
+                                        key={view}
+                                        initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} transition={{ duration: 0.5, ease: "easeOut" }}
+                                        className="space-y-6"
+                                    >
+                                        <h1 className="text-5xl font-extrabold leading-none tracking-tight drop-shadow-xl">
+                                            {view === 'login' && <span className="block">Welcome <br/> Back.</span>}
+                                            {view === 'signup' && <span className="block">Join the <br/> Future.</span>}
+                                            {view === 'forgot' && <span className="block">Recover <br/> Access.</span>}
+                                        </h1>
+
+                                        <div className="w-20 h-1.5 bg-gradient-to-r from-[#FF6B35] to-green-400 rounded-full shadow-lg"></div>
+
+                                        <p className="text-slate-100 text-lg font-medium leading-relaxed max-w-[90%] drop-shadow-md">
+                                            {view === 'login' && "Access India's largest XR developer community and premium resources."}
+                                            {view === 'signup' && "Start building your career in Extended Reality with top mentors."}
+                                            {view === 'forgot' && "We'll help you get back into your account safely and quickly."}
+                                        </p>
+                                    </motion.div>
+                                </AnimatePresence>
+                            </div>
+                        </div>
+                    </motion.div>
+
+                    {/* --- RIGHT PANEL (Forms - Clean Light Mode) --- */}
+                    {/* increased opacity to 80% white for crispness */}
+                    <div className="flex-1 bg-white/80 backdrop-blur-xl p-8 sm:p-14 lg:p-20 flex flex-col justify-center items-center relative">
+
+                        {/* Soft inner glow */}
+                        <div className="absolute inset-0 bg-gradient-to-b from-white via-white/50 to-white pointer-events-none"></div>
+
+                        <div className="w-full max-w-[440px] relative z-10">
+
+                            {/* Mobile Logo */}
+                            <div className="lg:hidden mb-10 text-center">
+                                <img src="/Bharatxr.png" alt="Logo" className="w-40 h-auto mx-auto mb-4 object-contain" />
+                            </div>
+
+                            <motion.div layout className="relative">
+                                <AnimatePresence mode="wait">
+                                    {view === 'login' && <LoginForm key="login" onForgotPassword={() => setView('forgot')} onSignup={() => setView('signup')} />}
+                                    {view === 'signup' && <SignupForm key="signup" onLogin={() => setView('login')} />}
+                                    {view === 'forgot' && <ForgotPasswordForm key="forgot" onBackToLogin={() => setView('login')} />}
+                                </AnimatePresence>
                             </motion.div>
-                        </AnimatePresence>
-                    </div>
 
-                    {/* Footer Stats */}
-                    <div className="relative z-10 flex gap-6 pt-8 border-t border-white/20">
-                        <div>
-                            <p className="text-xs text-orange-100 font-semibold uppercase tracking-wider">Members</p>
-                            <p className="text-xl font-bold">12k+</p>
-                        </div>
-                        <div>
-                            <p className="text-xs text-orange-100 font-semibold uppercase tracking-wider">Courses</p>
-                            <p className="text-xl font-bold">85+</p>
                         </div>
                     </div>
-                </motion.div>
 
-                {/* --- RIGHT PANEL (Forms) --- */}
-                <div className="flex-1 bg-white/40 p-6 sm:p-12 flex flex-col justify-center items-center relative">
-                    <div className="w-full max-w-md">
-
-                        {/* Mobile Logo */}
-                        <div className="lg:hidden mb-8 text-center">
-                            <img src="/Bharatxr.png" alt="Logo" className="w-12 h-12 mx-auto mb-2" />
-                            <h2 className="text-xl font-bold text-slate-800">BharatXR</h2>
-                        </div>
-
-                        <AnimatePresence mode="wait">
-                            {view === 'login' && (
-                                <LoginForm
-                                    key="login-form"
-                                    onForgotPassword={() => setView('forgot')}
-                                    onSignup={() => setView('signup')}
-                                />
-                            )}
-
-                            {view === 'signup' && (
-                                <SignupForm
-                                    key="signup-form"
-                                    onLogin={() => setView('login')}
-                                />
-                            )}
-
-                            {view === 'forgot' && (
-                                <ForgotPasswordForm
-                                    key="forgot-form"
-                                    onBackToLogin={() => setView('login')}
-                                />
-                            )}
-                        </AnimatePresence>
-
-                    </div>
                 </div>
             </motion.div>
         </div>
