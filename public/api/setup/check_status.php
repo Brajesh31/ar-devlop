@@ -2,7 +2,16 @@
 // public/api/setup/check_status.php
 ini_set('display_errors', 1);
 error_reporting(E_ALL);
-require_once '../../config/db.php';
+
+// FIX: Changed from ../../config/db.php to ../config/db.php
+// This assumes the structure is api/setup/check_status.php and api/config/db.php
+if (file_exists('../config/db.php')) {
+    require_once '../config/db.php';
+} elseif (file_exists('../../config/db.php')) {
+    require_once '../../config/db.php';
+} else {
+    die("❌ Critical Error: Could not find db.php. Please check if 'api/config/db.php' exists.");
+}
 
 echo "<h1>📊 Database Status Report</h1>";
 
