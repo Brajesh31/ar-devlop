@@ -1,12 +1,20 @@
 <?php
 // public/api/auth/register.php
 
-// 1. CORS & Headers
-if (isset($_SERVER['HTTP_ORIGIN'])) {
+// 1. CORS & Security Headers
+// Allow both your current dev domain and the future production domain
+$allowed_origins = [
+    "http://localhost:8083",
+    "https://bharatxr.edtech-community.com",
+    "https://bharatxr.co"
+];
+
+if (isset($_SERVER['HTTP_ORIGIN']) && in_array($_SERVER['HTTP_ORIGIN'], $allowed_origins)) {
     header("Access-Control-Allow-Origin: {$_SERVER['HTTP_ORIGIN']}");
     header('Access-Control-Allow-Credentials: true');
-    header('Access-Control-Allow-Headers: Content-Type');
+    header('Access-Control-Allow-Headers: Content-Type, Authorization');
 }
+
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit(0);
 }
@@ -21,31 +29,33 @@ function sendError($msg, $code = 400) {
     exit;
 }
 
-// 2. Get & Validate Input
+// 2. Get Input
 $input = json_decode(file_get_contents('php://input'), true);
 if (!$input) sendError("Invalid JSON input");
 
+// 3. Validation & Sanitization
 $required = ['first_name', 'last_name', 'phone', 'email', 'password', 'user_type'];
 foreach ($required as $f) {
     if (empty($input[$f])) sendError("Missing required field: $f");
 }
 
-// Sanitize Inputs
 $firstName = trim($input['first_name']);
 $middleName = isset($input['middle_name']) ? trim($input['middle_name']) : null;
 $lastName = trim($input['last_name']);
 $email = strtolower(trim($input['email']));
-$phoneRaw = preg_replace('/\D/', '', $input['phone']);
-$phone = substr($phoneRaw, -10);
+$phoneRaw = preg_replace('/\D/', '', $input['phone']); // Remove non-digits
+$phone = substr($phoneRaw, -10); // Keep last 10 digits
 $password = $input['password'];
 $userType = $input['user_type'];
-$linkedin = $input['linkedin'] ?? null;
-$github = $input['github'] ?? null;
+
+// Social Links (Optional)
+$linkedin = $input['linkedin_url'] ?? null;
+$github = $input['github_url'] ?? null;
 
 if (strlen($phone) !== 10) sendError("Phone number must be valid 10 digits");
 
 try {
-    // 3. Security Check: Prevent Duplicates
+    // 4. Check for Duplicates (Email or Phone)
     $stmt = $conn->prepare("SELECT user_id FROM users WHERE email = ? OR phone = ?");
     $stmt->execute([$email, $phone]);
     if ($stmt->rowCount() > 0) {
@@ -53,95 +63,86 @@ try {
     }
 
     // =================================================================
-    // 4. DYNAMIC TABLE LOGIC (The Core Feature)
+    // 5. HELPER FUNCTIONS (Dynamic Tables)
     // =================================================================
 
-    /**
-     * Creates a new table for a School or College with ALL profile columns.
-     * RELATIONS: user_id maps to 'users' table.
-     */
+    // Function to create the physical table for a specific school/college
     function createInstitutionTable($conn, $tableName, $type) {
-        $commonColumns = "
+        $commonCols = "
             id INT PRIMARY KEY AUTO_INCREMENT,
             user_id INT NOT NULL,
             first_name VARCHAR(50),
             last_name VARCHAR(50),
-
-            -- Extended Profile Data (Ready for 'Complete Profile' step)
-            profile_pic_url VARCHAR(255) NULL,
-            about_me TEXT NULL,
-            skills TEXT NULL, -- Stored as JSON or Comma-separated
-            education_details TEXT NULL, -- Extra JSON data for detailed education history
-            achievements TEXT NULL,
-
             joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-
-            -- RELATION LINE: Connects this student to the Master User Table
             FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
         ";
 
         $sql = "";
         if ($type === 'school') {
             $sql = "CREATE TABLE IF NOT EXISTS `$tableName` (
-                $commonColumns,
-                class_grade VARCHAR(50) -- Specific to Schools
+                $commonCols,
+                class_grade VARCHAR(50)
             )";
         } else {
-            // Undergraduate or Graduate
+            // UG or PG
             $sql = "CREATE TABLE IF NOT EXISTS `$tableName` (
-                $commonColumns,
-                branch VARCHAR(100), -- Specific to Colleges
-                stream VARCHAR(100)  -- Specific to Colleges
+                $commonCols,
+                branch VARCHAR(100),
+                stream VARCHAR(100)
             )";
         }
         $conn->exec($sql);
     }
 
-    /**
-     * Manages Directory Entries & Counts
-     */
+    // Function to Get or Create Directory Entry
     function getOrCreateIndex($conn, $name, $type) {
+        // Clean name for table usage (e.g., "IIT Delhi" -> "iit_delhi")
         $cleanName = strtolower(preg_replace('/[^a-zA-Z0-9]/', '_', trim($name)));
-        $timestamp = time();
 
-        $dirTable = "";
-        $prefix = "";
-        $colName = ($type === 'school') ? "school_name" : "college_name";
-        $idCol = ($type === 'school') ? "school_id" : "college_id";
-
+        // Config based on type
         if ($type === 'school') {
             $dirTable = "directory_schools";
+            $idCol = "school_id";
+            $nameCol = "school_name";
             $prefix = "school";
         } elseif ($type === 'undergraduate') {
             $dirTable = "directory_colleges_ug";
+            $idCol = "college_id";
+            $nameCol = "college_name";
             $prefix = "college_ug";
-        } elseif ($type === 'graduate') {
+        } else { // graduate
             $dirTable = "directory_colleges_pg";
+            $idCol = "college_id";
+            $nameCol = "college_name";
             $prefix = "college_pg";
         }
 
-        // Check if Institution Exists in Directory
-        $stmt = $conn->prepare("SELECT $idCol, dynamic_table_name FROM $dirTable WHERE $colName = ?");
+        // Check if exists
+        $stmt = $conn->prepare("SELECT $idCol, dynamic_table_name FROM $dirTable WHERE $nameCol = ?");
         $stmt->execute([trim($name)]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
         if ($row) {
-            // EXISTING: Just increment the student count
-            $updateStmt = $conn->prepare("UPDATE $dirTable SET student_count = student_count + 1 WHERE $idCol = ?");
-            $updateStmt->execute([$row[$idCol]]);
-
+            // Existing: Increment count
+            $update = $conn->prepare("UPDATE $dirTable SET student_count = student_count + 1 WHERE $idCol = ?");
+            $update->execute([$row[$idCol]]);
             return ['id' => $row[$idCol], 'tableName' => $row['dynamic_table_name']];
         } else {
-            // NEW: Create Entry & New Table
-            $tableName = "{$prefix}_{$timestamp}_{$cleanName}";
-            if (strlen($tableName) > 60) $tableName = substr($tableName, 0, 60);
-
-            // 1. Insert into Directory
-            $stmtIns = $conn->prepare("INSERT INTO $dirTable ($colName, dynamic_table_name, student_count) VALUES (?, ?, 1)");
-            $stmtIns->execute([trim($name), $tableName]);
+            // New: Insert and Create Table
+            // First, insert to get the ID
+            $stmtIns = $conn->prepare("INSERT INTO $dirTable ($nameCol, student_count) VALUES (?, 1)");
+            $stmtIns->execute([trim($name)]);
             $newId = $conn->lastInsertId();
 
-            // 2. Create the Physical Table
+            // Generate unique table name: school_12_dps_mathura
+            $tableName = "{$prefix}_{$newId}_{$cleanName}";
+            if (strlen($tableName) > 60) $tableName = substr($tableName, 0, 60);
+
+            // Update directory with table name
+            $stmtUpd = $conn->prepare("UPDATE $dirTable SET dynamic_table_name = ? WHERE $idCol = ?");
+            $stmtUpd->execute([$tableName, $newId]);
+
+            // Create the actual table
             createInstitutionTable($conn, $tableName, $type);
 
             return ['id' => $newId, 'tableName' => $tableName];
@@ -149,7 +150,7 @@ try {
     }
 
     // =================================================================
-    // 5. EXECUTE REGISTRATION
+    // 6. EXECUTE TRANSACTION
     // =================================================================
     $conn->beginTransaction();
 
@@ -161,18 +162,17 @@ try {
     $stmtUser->execute([$firstName, $middleName, $lastName, $email, $phone, $passHash, $userType, $linkedin, $github]);
     $userId = $conn->lastInsertId();
 
-    // B. Route Logic based on User Type
+    // B. Handle Specific Profiles
     if ($userType === 'school') {
         if (empty($input['school_name']) || empty($input['class_grade'])) throw new Exception("School Name and Class are required");
 
         $meta = getOrCreateIndex($conn, $input['school_name'], 'school');
 
-        // 1. Link User -> Directory (Profile Table)
+        // Link Profile
         $stmtProf = $conn->prepare("INSERT INTO profiles_school (user_id, school_id, class_grade) VALUES (?, ?, ?)");
         $stmtProf->execute([$userId, $meta['id'], $input['class_grade']]);
 
-        // 2. Insert into Specific School Table (Dynamic)
-        // Note: Profile fields (about, skills) are left NULL for now, to be filled in 'Complete Profile'
+        // Add to Dynamic Table (Data Redundancy for quick school-level access)
         $stmtDyn = $conn->prepare("INSERT INTO `{$meta['tableName']}` (user_id, first_name, last_name, class_grade) VALUES (?, ?, ?, ?)");
         $stmtDyn->execute([$userId, $firstName, $lastName, $input['class_grade']]);
 
@@ -182,23 +182,22 @@ try {
         $meta = getOrCreateIndex($conn, $input['college_name'], $userType);
         $tableProfile = ($userType === 'undergraduate') ? 'profiles_undergrad' : 'profiles_graduate';
 
-        // 1. Link User -> Directory (Profile Table)
+        // Link Profile
         $stmtProf = $conn->prepare("INSERT INTO $tableProfile (user_id, college_id, branch, stream) VALUES (?, ?, ?, ?)");
         $stmtProf->execute([$userId, $meta['id'], $input['branch'], $input['stream']]);
 
-        // 2. Insert into Specific College Table (Dynamic)
+        // Add to Dynamic Table
         $stmtDyn = $conn->prepare("INSERT INTO `{$meta['tableName']}` (user_id, first_name, last_name, branch, stream) VALUES (?, ?, ?, ?, ?)");
         $stmtDyn->execute([$userId, $firstName, $lastName, $input['branch'], $input['stream']]);
 
     } elseif ($userType === 'professional') {
         if (empty($input['job_role'])) throw new Exception("Job Role is required");
 
-        // Professionals share one table, no dynamic creation needed
         $stmtProf = $conn->prepare("INSERT INTO profiles_professional (user_id, job_role) VALUES (?, ?)");
         $stmtProf->execute([$userId, $input['job_role']]);
     }
 
-    if ($conn->inTransaction()) $conn->commit();
+    $conn->commit();
 
     echo json_encode([
         'status' => 'success',
@@ -208,7 +207,7 @@ try {
 
 } catch (Exception $e) {
     if ($conn->inTransaction()) $conn->rollBack();
-    error_log("Registration Error: " . $e->getMessage());
+    error_log("Register Error: " . $e->getMessage());
     sendError("Registration failed: " . $e->getMessage(), 500);
 }
 ?>
