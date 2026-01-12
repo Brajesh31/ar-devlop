@@ -19,13 +19,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 }
 header('Content-Type: application/json');
 
-// Disable HTML error display to prevent breaking JSON
+// Enable Error Reporting for Debugging (Check your PHP logs)
 ini_set('display_errors', 0);
 error_reporting(E_ALL);
 
 require_once '../../config/db.php';
 
-// Helper for Error Responses
 function sendError($msg, $code = 400) {
     http_response_code($code);
     echo json_encode(['status' => 'error', 'message' => $msg]);
@@ -36,7 +35,7 @@ function sendError($msg, $code = 400) {
 $input = json_decode(file_get_contents('php://input'), true);
 if (!$input) sendError("Invalid JSON input");
 
-// 3. Validation & Sanitization
+// 3. Validation
 $required = ['first_name', 'last_name', 'phone', 'email', 'password', 'user_type'];
 foreach ($required as $f) {
     if (empty($input[$f])) sendError("Missing required field: $f");
@@ -51,13 +50,14 @@ $phone = substr($phoneRaw, -10);
 $password = $input['password'];
 $userType = $input['user_type'];
 
+// Optional Social Links
 $linkedin = $input['linkedin_url'] ?? null;
 $github = $input['github_url'] ?? null;
 
 if (strlen($phone) !== 10) sendError("Phone number must be valid 10 digits");
 
 try {
-    // 4. Check for Duplicates (Email or Phone)
+    // 4. Check for Duplicates
     $stmt = $conn->prepare("SELECT user_id FROM users WHERE email = ? OR phone = ?");
     $stmt->execute([$email, $phone]);
     if ($stmt->rowCount() > 0) {
@@ -65,10 +65,9 @@ try {
     }
 
     // =================================================================
-    // 5. PREPARE DIRECTORY (DDL LOGIC - RUNS OUTSIDE TRANSACTION)
+    // 5. HELPER: DIRECTORY & TABLE CREATION (NO TRANSACTIONS)
     // =================================================================
 
-    // Function to create the physical table
     function createInstitutionTable($conn, $tableName, $type) {
         $commonCols = "
             id INT PRIMARY KEY AUTO_INCREMENT,
@@ -79,55 +78,34 @@ try {
             FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
         ";
 
-        $sql = "";
         if ($type === 'school') {
-            $sql = "CREATE TABLE IF NOT EXISTS `$tableName` (
-                $commonCols,
-                class_grade VARCHAR(50)
-            )";
+            $sql = "CREATE TABLE IF NOT EXISTS `$tableName` ($commonCols, class_grade VARCHAR(50))";
         } else {
-            $sql = "CREATE TABLE IF NOT EXISTS `$tableName` (
-                $commonCols,
-                branch VARCHAR(100),
-                stream VARCHAR(100)
-            )";
+            $sql = "CREATE TABLE IF NOT EXISTS `$tableName` ($commonCols, branch VARCHAR(100), stream VARCHAR(100))";
         }
         $conn->exec($sql);
     }
 
-    // Function to Get or Create Directory Entry
     function getOrCreateIndex($conn, $name, $type) {
         $cleanName = strtolower(preg_replace('/[^a-zA-Z0-9]/', '_', trim($name)));
 
         if ($type === 'school') {
-            $dirTable = "directory_schools";
-            $idCol = "school_id";
-            $nameCol = "school_name";
-            $prefix = "school";
+            $dirTable = "directory_schools"; $idCol = "school_id"; $nameCol = "school_name"; $prefix = "school";
         } elseif ($type === 'undergraduate') {
-            $dirTable = "directory_colleges_ug";
-            $idCol = "college_id";
-            $nameCol = "college_name";
-            $prefix = "college_ug";
-        } else { // graduate
-            $dirTable = "directory_colleges_pg";
-            $idCol = "college_id";
-            $nameCol = "college_name";
-            $prefix = "college_pg";
+            $dirTable = "directory_colleges_ug"; $idCol = "college_id"; $nameCol = "college_name"; $prefix = "college_ug";
+        } else {
+            $dirTable = "directory_colleges_pg"; $idCol = "college_id"; $nameCol = "college_name"; $prefix = "college_pg";
         }
 
-        // Check if exists
         $stmt = $conn->prepare("SELECT $idCol, dynamic_table_name FROM $dirTable WHERE $nameCol = ?");
         $stmt->execute([trim($name)]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
         if ($row) {
-            // Existing: Increment count
             $update = $conn->prepare("UPDATE $dirTable SET student_count = student_count + 1 WHERE $idCol = ?");
             $update->execute([$row[$idCol]]);
             return ['id' => $row[$idCol], 'tableName' => $row['dynamic_table_name']];
         } else {
-            // New: Insert and Create Table
             $stmtIns = $conn->prepare("INSERT INTO $dirTable ($nameCol, student_count) VALUES (?, 1)");
             $stmtIns->execute([trim($name)]);
             $newId = $conn->lastInsertId();
@@ -138,30 +116,14 @@ try {
             $stmtUpd = $conn->prepare("UPDATE $dirTable SET dynamic_table_name = ? WHERE $idCol = ?");
             $stmtUpd->execute([$tableName, $newId]);
 
-            // Create table (DDL - Implicit Commit)
             createInstitutionTable($conn, $tableName, $type);
-
             return ['id' => $newId, 'tableName' => $tableName];
         }
     }
 
-    // PREPARE METADATA BEFORE TRANSACTION
-    // This prevents "Implicit Commit" issues when creating new tables
-    $meta = null;
-    if ($userType === 'school') {
-        if (empty($input['school_name']) || empty($input['class_grade'])) sendError("School Name and Class are required");
-        $meta = getOrCreateIndex($conn, $input['school_name'], 'school');
-    } elseif ($userType === 'undergraduate' || $userType === 'graduate') {
-        if (empty($input['college_name']) || empty($input['branch']) || empty($input['stream'])) sendError("College details are required");
-        $meta = getOrCreateIndex($conn, $input['college_name'], $userType);
-    } elseif ($userType === 'professional') {
-        if (empty($input['job_role'])) sendError("Job Role is required");
-    }
-
     // =================================================================
-    // 6. EXECUTE USER CREATION TRANSACTION
+    // 6. EXECUTE INSERTIONS (SEQUENTIAL)
     // =================================================================
-    $conn->beginTransaction();
 
     // A. Create Master User
     $passHash = password_hash($password, PASSWORD_BCRYPT);
@@ -173,31 +135,34 @@ try {
 
     // B. Handle Specific Profiles
     if ($userType === 'school') {
-        // Link Profile
+        if (empty($input['school_name']) || empty($input['class_grade'])) sendError("School Name and Class are required");
+
+        $meta = getOrCreateIndex($conn, $input['school_name'], 'school');
+
         $stmtProf = $conn->prepare("INSERT INTO profiles_school (user_id, school_id, class_grade) VALUES (?, ?, ?)");
         $stmtProf->execute([$userId, $meta['id'], $input['class_grade']]);
 
-        // Add to Dynamic Table
         $stmtDyn = $conn->prepare("INSERT INTO `{$meta['tableName']}` (user_id, first_name, last_name, class_grade) VALUES (?, ?, ?, ?)");
         $stmtDyn->execute([$userId, $firstName, $lastName, $input['class_grade']]);
 
     } elseif ($userType === 'undergraduate' || $userType === 'graduate') {
+        if (empty($input['college_name']) || empty($input['branch']) || empty($input['stream'])) sendError("College details are required");
+
+        $meta = getOrCreateIndex($conn, $input['college_name'], $userType);
         $tableProfile = ($userType === 'undergraduate') ? 'profiles_undergrad' : 'profiles_graduate';
 
-        // Link Profile
         $stmtProf = $conn->prepare("INSERT INTO $tableProfile (user_id, college_id, branch, stream) VALUES (?, ?, ?, ?)");
         $stmtProf->execute([$userId, $meta['id'], $input['branch'], $input['stream']]);
 
-        // Add to Dynamic Table
         $stmtDyn = $conn->prepare("INSERT INTO `{$meta['tableName']}` (user_id, first_name, last_name, branch, stream) VALUES (?, ?, ?, ?, ?)");
         $stmtDyn->execute([$userId, $firstName, $lastName, $input['branch'], $input['stream']]);
 
     } elseif ($userType === 'professional') {
+        if (empty($input['job_role'])) sendError("Job Role is required");
+
         $stmtProf = $conn->prepare("INSERT INTO profiles_professional (user_id, job_role) VALUES (?, ?)");
         $stmtProf->execute([$userId, $input['job_role']]);
     }
-
-    $conn->commit();
 
     echo json_encode([
         'status' => 'success',
@@ -206,15 +171,7 @@ try {
     ]);
 
 } catch (Exception $e) {
-    // Only rollback if a transaction is actually active
-    if ($conn->inTransaction()) {
-        $conn->rollBack();
-    }
-
-    // Log error to server file
     error_log("Register Error: " . $e->getMessage());
-
-    // Return specific error to frontend for debugging
     sendError("Server Error: " . $e->getMessage(), 500);
 }
 ?>
