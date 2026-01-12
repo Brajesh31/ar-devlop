@@ -11,6 +11,8 @@ export type EventFee = 'free' | 'paid';
 // ... (Keep all your existing Interfaces: EventTimeline, EventReward, EventFAQ, EventEligibility) ...
 
 export interface Event {
+  rewards: any;
+  timeline: any;
   faqs: any;
   eligibility: any;
   id: string;

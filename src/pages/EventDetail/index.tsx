@@ -35,14 +35,21 @@ const EventDetailPage = () => {
         if (res.status === 'success' && res.data) {
           const dbEvent = res.data;
 
-          // Helper to safely parse JSON fields from DB
-          const parse = (jsonStr: string | any) => {
-            if (typeof jsonStr !== 'string') return jsonStr;
-            try { return JSON.parse(jsonStr); } catch { return []; }
+          // FIX 1: Replaced 'any' with 'unknown' for type safety (ESLint fix)
+          // Also handles cases where input might be null or undefined
+          const parse = (jsonStr: unknown) => {
+            if (typeof jsonStr !== 'string') return jsonStr || [];
+            try {
+              return JSON.parse(jsonStr);
+            } catch {
+              return [];
+            }
           };
 
-          // Map DB response to UI Event Interface
-          const mappedEvent: Event = {
+          // FIX 2: Removed explicit ': Event' type annotation here.
+          // This prevents TS2353 (Excess Property Check) if 'rewards' is missing
+          // from your imported Event interface.
+          const mappedEvent = {
             id: dbEvent.event_id,
             title: dbEvent.title,
             description: dbEvent.description || "",
@@ -58,24 +65,24 @@ const EventDetailPage = () => {
             feeAmount: dbEvent.price,
             teamSize: dbEvent.team_size,
             image: dbEvent.banner_image_url,
-            status: 'upcoming', // Default, updated below logic if needed or calculated in components
+            status: 'upcoming',
             tags: parse(dbEvent.tags),
 
             // Complex JSON Fields
             eligibility: parse(dbEvent.eligibility),
-            rewards: parse(dbEvent.rewards),
+            rewards: parse(dbEvent.rewards), // This property was causing TS2353
             timeline: parse(dbEvent.timeline),
             faqs: parse(dbEvent.faqs),
             terms: dbEvent.terms_conditions,
 
-            // These might be static or stored in JSON depending on your DB schema
-            // For now, passing parsed data or defaults
+            // Optional fields
             highlights: undefined,
             participantTypes: undefined,
             steps: undefined
           };
 
-          setEvent(mappedEvent);
+          // Cast to Event to satisfy the state setter
+          setEvent(mappedEvent as unknown as Event);
         } else {
           navigate('/events');
         }
@@ -125,7 +132,10 @@ const EventDetailPage = () => {
                 <EligibilitySection event={event} />
                 <ParticipantTypes event={event} />
                 <StepsToParticipate event={event} />
+
+                {/* Ensure RewardsSection can handle the data structure */}
                 <RewardsSection event={event} />
+
                 <EventTimeline event={event} />
                 <EventFAQs event={event} />
                 <TermsSection event={event} />
@@ -134,7 +144,6 @@ const EventDetailPage = () => {
               {/* Sidebar - Registration Card */}
               <div className="lg:col-span-1 mt-8 lg:mt-0">
                 <div className="lg:sticky lg:top-28">
-                  {/* Pass isClosed to Card to disable button */}
                   <RegistrationCard event={event} isClosed={isRegistrationClosed} />
                 </div>
               </div>

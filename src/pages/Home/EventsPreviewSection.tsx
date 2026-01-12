@@ -46,7 +46,7 @@ export const EventsPreviewSection = () => {
             date: e.start_date,
             mode: (e.mode || 'online').toLowerCase(),
             location: e.mode === 'online' ? 'Online' : e.location_city,
-            image: e.banner_image_url, // <--- ADDED THIS LINE
+            image: e.banner_image_url,
             status: 'upcoming',
             tags: e.tags
           }));
@@ -62,8 +62,10 @@ export const EventsPreviewSection = () => {
     fetchEvents();
   }, []);
 
-  // 2. Use your Helper Function with the Real Data
-  const upcomingEvents = getUpcomingEvents(events).slice(0, 3);
+  // 2. Filter & Sort: Farthest Date First
+  const upcomingEvents = getUpcomingEvents(events)
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()) // <--- CHANGED: Sort Descending (Farthest First)
+      .slice(0, 3);
 
   if (isLoading) {
     return <div className="py-20 flex justify-center"><Loader2 className="animate-spin text-primary" /></div>;
@@ -126,10 +128,10 @@ export const EventsPreviewSection = () => {
                     <motion.div key={event.id} variants={itemVariants}>
                       <Link to={`/events/${event.slug || event.id}`}>
                         <HoverLift liftAmount={4}>
-                          {/* CARD CONTAINER: Removed padding, added overflow-hidden */}
+                          {/* CARD CONTAINER */}
                           <div className="h-full bg-card rounded-xl border border-border shadow-sm group overflow-hidden flex flex-col">
 
-                            {/* 1. IMAGE SECTION (New) */}
+                            {/* 1. IMAGE SECTION */}
                             <div className="aspect-video w-full bg-muted relative overflow-hidden">
                               {event.image ? (
                                   <img
@@ -143,11 +145,10 @@ export const EventsPreviewSection = () => {
                                   </div>
                               )}
 
-                              {/* Overlay Gradient (Optional, makes text pop if you overlay it, but here it adds depth) */}
                               <div className="absolute inset-0 bg-gradient-to-t from-black/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
                             </div>
 
-                            {/* 2. CONTENT SECTION (Wrapped in padding) */}
+                            {/* 2. CONTENT SECTION */}
                             <div className="p-4 md:p-5 flex flex-col flex-grow">
                               <div className="flex items-center justify-between mb-3">
                                 <motion.span
