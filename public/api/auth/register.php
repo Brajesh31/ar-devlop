@@ -1,8 +1,7 @@
 <?php
 // public/api/auth/register.php
 
-// 1. HEADERS & CONFIG
-// --------------------------------------------------
+// --- 1. CONFIGURATION & HEADERS ---
 $allowed_origins = [
     "http://localhost:5173",
     "https://bharatxr.edtech-community.com",
@@ -18,29 +17,37 @@ if (isset($_SERVER['HTTP_ORIGIN']) && in_array($_SERVER['HTTP_ORIGIN'], $allowed
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') exit(0);
 header('Content-Type: application/json');
 
-// Disable HTML errors to ensure JSON response
+// Enable error reporting but catch them to return JSON
 ini_set('display_errors', 0);
 error_reporting(E_ALL);
 
 require_once '../../config/db.php';
 
-function sendError($msg, $code = 400) {
+// Helper to force JSON error response even on crash
+function sendError($msg, $code = 400, $details = null) {
     http_response_code($code);
-    echo json_encode(['status' => 'error', 'message' => $msg]);
+    echo json_encode([
+        'status' => 'error',
+        'message' => $msg,
+        'details' => $details
+    ]);
     exit;
 }
 
 try {
-    // 2. INPUT & VALIDATION
-    // --------------------------------------------------
+    // Force PDO to throw exceptions
+    $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+
+    // --- 2. INPUT VALIDATION ---
     $input = json_decode(file_get_contents('php://input'), true);
-    if (!$input) sendError("Invalid JSON input");
+    if (!$input) sendError("Invalid JSON input received");
 
     $required = ['first_name', 'last_name', 'phone', 'email', 'password', 'user_type'];
     foreach ($required as $f) {
         if (empty($input[$f])) sendError("Missing required field: $f");
     }
 
+    // Clean Data
     $firstName = trim($input['first_name']);
     $middleName = isset($input['middle_name']) ? trim($input['middle_name']) : null;
     $lastName = trim($input['last_name']);
@@ -54,34 +61,27 @@ try {
 
     if (strlen($phone) !== 10) sendError("Phone number must be valid 10 digits");
 
-    // 3. CHECK DUPLICATES
-    // --------------------------------------------------
+    // --- 3. CHECK DUPLICATES ---
     $stmt = $conn->prepare("SELECT user_id FROM users WHERE email = ? OR phone = ?");
     $stmt->execute([$email, $phone]);
-    if ($stmt->rowCount() > 0) {
-        sendError("User with this Email or Phone already exists.", 409);
-    }
+    if ($stmt->rowCount() > 0) sendError("User with this Email or Phone already exists.", 409);
 
-    // 4. STEP 1: CREATE USER (The most important part)
-    // --------------------------------------------------
-    // We do this FIRST so we have a valid User ID for everything else.
+    // --- 4. STEP 1: CREATE MASTER USER ---
     $passHash = password_hash($password, PASSWORD_BCRYPT);
-
     $sqlUser = "INSERT INTO users (first_name, middle_name, last_name, email, phone, password_hash, user_type, linkedin_url, github_url)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
-    $stmtUser = $conn->prepare($sqlUser);
-    if (!$stmtUser->execute([$firstName, $middleName, $lastName, $email, $phone, $passHash, $userType, $linkedin, $github])) {
-        throw new Exception("Failed to insert user into database.");
+    try {
+        $stmtUser = $conn->prepare($sqlUser);
+        $stmtUser->execute([$firstName, $middleName, $lastName, $email, $phone, $passHash, $userType, $linkedin, $github]);
+        $userId = $conn->lastInsertId();
+    } catch (PDOException $e) {
+        throw new Exception("STEP 1 FAILED (User Creation): " . $e->getMessage());
     }
 
-    $userId = $conn->lastInsertId();
+    // --- 5. HELPER FUNCTIONS ---
 
-    // 5. STEP 2: HANDLE DIRECTORIES & DYNAMIC TABLES
-    // --------------------------------------------------
-
-    // Helper: Create Table SQL (Executed instantly)
-    function createTable($conn, $tableName, $type) {
+    function createTableSafe($conn, $tableName, $type) {
         $commonCols = "
             id INT PRIMARY KEY AUTO_INCREMENT,
             user_id INT NOT NULL,
@@ -92,16 +92,23 @@ try {
         ";
 
         if ($type === 'school') {
-            $sql = "CREATE TABLE IF NOT EXISTS `$tableName` ($commonCols, class_grade VARCHAR(50))";
+            $sql = "CREATE TABLE IF NOT EXISTS `$tableName` ($commonCols, class_grade VARCHAR(50)) ENGINE=InnoDB";
         } else {
-            $sql = "CREATE TABLE IF NOT EXISTS `$tableName` ($commonCols, branch VARCHAR(100), stream VARCHAR(100))";
+            $sql = "CREATE TABLE IF NOT EXISTS `$tableName` ($commonCols, branch VARCHAR(100), stream VARCHAR(100)) ENGINE=InnoDB";
         }
-        $conn->exec($sql);
+
+        try {
+            $conn->exec($sql);
+        } catch (PDOException $e) {
+            // Log but don't stop execution if possible, but for registration we should probably know
+            error_log("Table Creation Failed: " . $e->getMessage());
+            throw new Exception("Failed to create student list table: " . $e->getMessage());
+        }
     }
 
-    // Helper: Handle Directory Logic
     function processDirectory($conn, $name, $type) {
         $cleanName = strtolower(preg_replace('/[^a-zA-Z0-9]/', '_', trim($name)));
+        if (empty($cleanName)) $cleanName = "institution";
 
         if ($type === 'school') {
             $dirTable = "directory_schools"; $idCol = "school_id"; $nameCol = "school_name"; $prefix = "school";
@@ -111,87 +118,82 @@ try {
             $dirTable = "directory_colleges_pg"; $idCol = "college_id"; $nameCol = "college_name"; $prefix = "college_pg";
         }
 
-        // Check if institution exists
+        // Check Directory
         $stmt = $conn->prepare("SELECT $idCol, dynamic_table_name FROM $dirTable WHERE $nameCol = ?");
         $stmt->execute([trim($name)]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
         if ($row) {
-            // Exists: Just increment count
+            // Update Count
             $conn->prepare("UPDATE $dirTable SET student_count = student_count + 1 WHERE $idCol = ?")->execute([$row[$idCol]]);
-            return ['id' => $row[$idCol], 'tableName' => $row['dynamic_table_name']];
-        } else {
-            // New: Insert to directory
-            $conn->prepare("INSERT INTO $dirTable ($nameCol, student_count) VALUES (?, 1)")->execute([trim($name)]);
-            $newId = $conn->lastInsertId();
 
-            // Create Table Name
-            $tableName = "{$prefix}_{$newId}_{$cleanName}";
-            if (strlen($tableName) > 60) $tableName = substr($tableName, 0, 60);
-
-            // Save Table Name
-            $conn->prepare("UPDATE $dirTable SET dynamic_table_name = ? WHERE $idCol = ?")->execute([$tableName, $newId]);
-
-            // Create Physical Table
-            createTable($conn, $tableName, $type);
-
-            return ['id' => $newId, 'tableName' => $tableName];
+            // ENSURE TABLE EXISTS (Fix for "Table doesn't exist" error)
+            if (!empty($row['dynamic_table_name'])) {
+                createTableSafe($conn, $row['dynamic_table_name'], $type);
+                return ['id' => $row[$idCol], 'tableName' => $row['dynamic_table_name']];
+            }
         }
+
+        // New Entry
+        $stmtIns = $conn->prepare("INSERT INTO $dirTable ($nameCol, student_count) VALUES (?, 1)");
+        $stmtIns->execute([trim($name)]);
+        $newId = $conn->lastInsertId();
+
+        $tableName = "{$prefix}_{$newId}_{$cleanName}";
+        if (strlen($tableName) > 60) $tableName = substr($tableName, 0, 60);
+
+        $conn->prepare("UPDATE $dirTable SET dynamic_table_name = ? WHERE $idCol = ?")->execute([$tableName, $newId]);
+
+        createTableSafe($conn, $tableName, $type);
+        return ['id' => $newId, 'tableName' => $tableName];
     }
 
-    // 6. STEP 3: INSERT PROFILE DATA (Based on User Type)
-    // --------------------------------------------------
+    // --- 6. STEP 2 & 3: DIRECTORY & PROFILES ---
 
     if ($userType === 'school') {
-        if (empty($input['school_name']) || empty($input['class_grade'])) throw new Exception("School Name and Class are required");
+        if (empty($input['school_name'])) throw new Exception("School Name required");
+        $classGrade = $input['class_grade'] ?? 'N/A';
 
         $meta = processDirectory($conn, $input['school_name'], 'school');
 
         // Link Profile
         $conn->prepare("INSERT INTO profiles_school (user_id, school_id, class_grade) VALUES (?, ?, ?)")
-             ->execute([$userId, $meta['id'], $input['class_grade']]);
+             ->execute([$userId, $meta['id'], $classGrade]);
 
         // Add to Dynamic Table
         $conn->prepare("INSERT INTO `{$meta['tableName']}` (user_id, first_name, last_name, class_grade) VALUES (?, ?, ?, ?)")
-             ->execute([$userId, $firstName, $lastName, $input['class_grade']]);
+             ->execute([$userId, $firstName, $lastName, $classGrade]);
 
     } elseif ($userType === 'undergraduate' || $userType === 'graduate') {
-        if (empty($input['college_name']) || empty($input['branch']) || empty($input['stream'])) throw new Exception("College details are required");
+        if (empty($input['college_name'])) throw new Exception("College Name required");
 
         $meta = processDirectory($conn, $input['college_name'], $userType);
         $tableProfile = ($userType === 'undergraduate') ? 'profiles_undergrad' : 'profiles_graduate';
+        $branch = $input['branch'] ?? 'N/A';
+        $stream = $input['stream'] ?? 'N/A';
 
         // Link Profile
         $conn->prepare("INSERT INTO $tableProfile (user_id, college_id, branch, stream) VALUES (?, ?, ?, ?)")
-             ->execute([$userId, $meta['id'], $input['branch'], $input['stream']]);
+             ->execute([$userId, $meta['id'], $branch, $stream]);
 
         // Add to Dynamic Table
         $conn->prepare("INSERT INTO `{$meta['tableName']}` (user_id, first_name, last_name, branch, stream) VALUES (?, ?, ?, ?, ?)")
-             ->execute([$userId, $firstName, $lastName, $input['branch'], $input['stream']]);
+             ->execute([$userId, $firstName, $lastName, $branch, $stream]);
 
     } elseif ($userType === 'professional') {
-        if (empty($input['job_role'])) throw new Exception("Job Role is required");
+        if (empty($input['job_role'])) throw new Exception("Job Role required");
 
         $conn->prepare("INSERT INTO profiles_professional (user_id, job_role) VALUES (?, ?)")
              ->execute([$userId, $input['job_role']]);
     }
 
-    // 7. SUCCESS RESPONSE
-    // --------------------------------------------------
-    echo json_encode([
-        'status' => 'success',
-        'message' => 'Registration successful',
-        'user_id' => $userId
-    ]);
+    // --- SUCCESS ---
+    echo json_encode(['status' => 'success', 'message' => 'Registration successful', 'user_id' => $userId]);
 
 } catch (Exception $e) {
-    // If user was created but profile failed, we should technically delete the user to keep DB clean.
-    // However, for debugging 500 errors, we return the message first.
-
-    $errorMsg = $e->getMessage();
-    error_log("Register Error: " . $errorMsg);
-
-    // Return specific SQL error to frontend so you can see it in Console
-    sendError("Database Error: " . $errorMsg, 500);
+    // If we failed after creating a user, we technically have an "Orphan User".
+    // In production, we'd delete them. For now, we just report the error.
+    error_log("REGISTER API ERROR: " . $e->getMessage());
+    sendError("Registration Failed: " . $e->getMessage(), 500, $e->getTraceAsString());
 }
 ?>
