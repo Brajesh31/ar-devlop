@@ -7,9 +7,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Helmet } from 'react-helmet-async';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Form, FormControl, FormField, FormItem, FormMessage } from '@/components/ui/form';
 import { useToast } from '@/hooks/use-toast';
-import { Lock, Mail, ShieldCheck, ArrowRight, Loader2, ArrowLeft, KeyRound } from 'lucide-react';
+import { Lock, Mail, ShieldCheck, Loader2, ArrowLeft, KeyRound } from 'lucide-react';
 import { authService } from '@/services/api';
 
 // --- Schemas ---
@@ -22,6 +22,7 @@ const forgotSchema = z.object({
     email: z.string().email('Invalid email address'),
 });
 
+// Types derived from Zod
 type LoginForm = z.infer<typeof loginSchema>;
 type ForgotForm = z.infer<typeof forgotSchema>;
 
@@ -46,7 +47,16 @@ const AdminLogin = () => {
     const onLogin = async (data: LoginForm) => {
         setIsLoading(true);
         try {
-            const response = await authService.adminLogin(data);
+            // FIX: Explicitly assert the type here.
+            // The zodResolver ensures 'data' is valid, but TS fears 'data' might be partial
+            // coming from the form hook. This cast satisfies the 'LoginCredentials' requirement.
+            const payload = {
+                email: data.email,
+                password: data.password
+            };
+
+            const response = await authService.adminLogin(payload);
+
             if (response.status === 'success' && (response.user || response.data)) {
                 const adminUser = response.user || response.data;
                 toast({
@@ -64,6 +74,7 @@ const AdminLogin = () => {
                 });
             }
         } catch (error) {
+            console.error("Login error:", error);
             toast({ title: "Error", description: "Network error.", variant: "destructive" });
         } finally {
             setIsLoading(false);
@@ -73,7 +84,6 @@ const AdminLogin = () => {
     const onForgot = async (data: ForgotForm) => {
         setIsLoading(true);
         try {
-            // We will create this API function in the next step
             const response = await authService.adminForgotPassword(data.email);
 
             if (response.status === 'success') {
@@ -82,7 +92,7 @@ const AdminLogin = () => {
                     description: "Check your inbox for the reset link.",
                     className: "bg-blue-50 border-blue-200 text-blue-900"
                 });
-                setView('login'); // Go back to login
+                setView('login');
             } else {
                 toast({
                     title: "Error",
@@ -91,6 +101,7 @@ const AdminLogin = () => {
                 });
             }
         } catch (error) {
+            console.error("Forgot password error:", error);
             toast({ title: "Error", description: "Network error.", variant: "destructive" });
         } finally {
             setIsLoading(false);

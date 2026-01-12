@@ -13,48 +13,94 @@ import {
 import { adminService } from '@/services/api';
 import { useToast } from '@/hooks/use-toast';
 
+// --- 1. Define Types (Fixes 'no-explicit-any') ---
+
+interface Registration {
+    reg_id: string | number;
+    first_name: string;
+    last_name: string;
+    email: string;
+    contact_no: string;
+    gender: string;
+    city: string;
+    organization_name: string;
+    job_title: string;
+    registered_at: string;
+}
+
+interface EventData {
+    title: string;
+    event_type: string;
+    status: 'draft' | 'published' | 'archived'; // Add specific status types if known
+    start_date: string;
+    location_city: string;
+    slug: string;
+    fee_type: 'free' | 'paid';
+    price: string | number;
+    team_size: number;
+    registration_table_name: string;
+}
+
+interface ApiResponse {
+    status: string;
+    message?: string;
+    event: EventData;
+    registrations: Registration[];
+}
+
 const EventAnalytics = () => {
     const { id } = useParams();
     const navigate = useNavigate();
     const { toast } = useToast();
 
-    const [data, setData] = useState<any>(null);
+    // Fix: Typed useState instead of <any>
+    const [data, setData] = useState<ApiResponse | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [search, setSearch] = useState("");
 
-    // --- 1. Load Data ---
     useEffect(() => {
-        if (id) loadData();
-    }, [id]);
+        const loadData = async () => {
+            if (!id) return;
 
-    const loadData = async () => {
-        try {
-            // Connects to get_details.php
-            const res = await adminService.events.getDetails(id!);
-            if (res.status === 'success' && res.event) {
-                setData(res);
-            } else {
-                throw new Error(res.message || "Event not found");
+            try {
+                setIsLoading(true);
+                // We assume adminService returns a Promise resolving to ApiResponse
+                const res = await adminService.events.getDetails(id) as ApiResponse;
+
+                if (res.status === 'success' && res.event) {
+                    setData(res);
+                } else {
+                    throw new Error(res.message || "Event not found");
+                }
+            } catch (error) {
+                // Fix: Error is 'unknown' in catch blocks, not 'any'
+                console.error("Analytics Error:", error);
+                toast({
+                    title: "Error",
+                    description: "Failed to load event details.",
+                    variant: "destructive"
+                });
+            } finally {
+                setIsLoading(false);
             }
-        } catch (error: any) {
-            console.error("Analytics Error:", error);
-            toast({ title: "Error", description: "Failed to load event details.", variant: "destructive" });
-        } finally {
-            setIsLoading(false);
-        }
-    };
+        };
 
-    // --- 2. Export CSV ---
+        loadData();
+    }, [id, toast]);
+
     const handleExport = () => {
         if (!data?.registrations || data.registrations.length === 0) {
-            toast({ title: "No Data", description: "No registrations available to export.", variant: "outline" });
+            // Fix: Toast variant 'outline' does not exist. Removed it to use default.
+            toast({
+                title: "No Data",
+                description: "No registrations available to export."
+            });
             return;
         }
 
-        // Headers matching the dynamic table structure
         const headers = ["ID", "First Name", "Last Name", "Email", "Phone", "Gender", "City", "Organization", "Job Title", "Registered At"];
 
-        const rows = data.registrations.map((r: any) => [
+        const rows = data.registrations.map((r) => [
             r.reg_id,
             r.first_name,
             r.last_name,
@@ -64,19 +110,26 @@ const EventAnalytics = () => {
             r.city,
             r.organization_name,
             r.job_title,
-            new Date(r.registered_at).toLocaleString()
+            r.registered_at ? new Date(r.registered_at).toLocaleString() : 'N/A'
         ]);
 
-        const csvContent = "data:text/csv;charset=utf-8,"
-            + [headers.join(','), ...rows.map((e: any[]) => e.map((i: any) => `"${i || ''}"`).join(','))].join('\n');
+        const csvContent = [
+            headers.join(','),
+            ...rows.map((e) => e.map((i) => `"${String(i || '').replace(/"/g, '""')}"`).join(','))
+        ].join('\n');
 
-        const encodedUri = encodeURI(csvContent);
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement("a");
-        link.setAttribute("href", encodedUri);
+        const url = URL.createObjectURL(blob);
+
+        link.setAttribute("href", url);
         link.setAttribute("download", `registrations_${data.event.slug || 'event'}.csv`);
+        link.style.visibility = 'hidden';
+
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+        URL.revokeObjectURL(url);
     };
 
     if (isLoading) return (
@@ -99,17 +152,19 @@ const EventAnalytics = () => {
     const event = data.event;
     const registrations = data.registrations || [];
 
-    // --- Filter Logic ---
-    const filteredStudents = registrations.filter((s: any) =>
-        (s.first_name?.toLowerCase() || '').includes(search.toLowerCase()) ||
-        (s.last_name?.toLowerCase() || '').includes(search.toLowerCase()) ||
-        (s.email?.toLowerCase() || '').includes(search.toLowerCase()) ||
-        (s.organization_name?.toLowerCase() || '').includes(search.toLowerCase())
-    );
+    // Fix: Explicitly typed 's' as Registration to avoid 'any'
+    const filteredStudents = registrations.filter((s: Registration) => {
+        const query = search.toLowerCase();
+        return (
+            (s.first_name?.toLowerCase() || '').includes(query) ||
+            (s.last_name?.toLowerCase() || '').includes(query) ||
+            (s.email?.toLowerCase() || '').includes(query) ||
+            (s.organization_name?.toLowerCase() || '').includes(query)
+        );
+    });
 
     return (
         <div className="space-y-6 max-w-7xl mx-auto pb-12">
-
             {/* --- HEADER --- */}
             <div className="flex flex-col md:flex-row items-start md:items-center gap-4 border-b pb-6">
                 <Button variant="ghost" size="icon" onClick={() => navigate('/admin/events')} className="mt-1">
@@ -192,6 +247,7 @@ const EventAnalytics = () => {
                             placeholder="Search students, orgs..."
                             className="pl-8 bg-white"
                             value={search}
+                            // Fix: Added explicit generic type for onChange event if needed, though React infers this well
                             onChange={(e) => setSearch(e.target.value)}
                         />
                     </div>
@@ -216,7 +272,7 @@ const EventAnalytics = () => {
                                     </TableCell>
                                 </TableRow>
                             ) : (
-                                filteredStudents.map((student: any) => (
+                                filteredStudents.map((student) => (
                                     <TableRow key={student.reg_id}>
                                         <TableCell className="font-medium">
                                             <div className="capitalize">{student.first_name} {student.last_name}</div>
@@ -242,8 +298,12 @@ const EventAnalytics = () => {
                                         </TableCell>
                                         <TableCell>{student.city}</TableCell>
                                         <TableCell className="text-slate-500 text-xs whitespace-nowrap">
-                                            {new Date(student.registered_at).toLocaleDateString()} <br/>
-                                            {new Date(student.registered_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                            {student.registered_at ? (
+                                                <>
+                                                    {new Date(student.registered_at).toLocaleDateString()} <br/>
+                                                    {new Date(student.registered_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                                </>
+                                            ) : '-'}
                                         </TableCell>
                                     </TableRow>
                                 ))

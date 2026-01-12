@@ -56,7 +56,6 @@ export const EventHero = ({ event, isClosed }: EventHeroProps) => {
             ) : (
                 <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-slate-100 to-slate-200">
               <span className="text-6xl md:text-8xl opacity-20 grayscale">
-                {event.type === 'hackathon' && '🚀'}
                 {event.type === 'workshop' && '🛠️'}
                 {event.type === 'challenge' && '🏆'}
                 {event.type === 'meetup' && '👥'}

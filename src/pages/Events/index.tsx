@@ -27,7 +27,7 @@ const EventsPage = () => {
       try {
         const res = await publicService.events.list();
         if (res.status === 'success') {
-          console.log("Fetched Events:", res.data); // Debugging Log
+          // console.log("Fetched Events:", res.data); // Debugging Log
           setApiEvents(res.data);
         }
       } catch (error) {
@@ -65,9 +65,9 @@ const EventsPage = () => {
 
       return {
         id: e.event_id,
+        slug: e.slug, // <--- ADDED SLUG HERE
         title: e.title,
         description: e.description,
-        // FIX: Ensure lowercase type to match 'EventType'
         type: (e.event_type || 'workshop').toLowerCase() as EventType,
         date: safeStartDate,
         startDateObj: startDate, // For sorting

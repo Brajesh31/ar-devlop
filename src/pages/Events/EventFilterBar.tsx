@@ -21,7 +21,6 @@ interface EventFilterBarProps {
 const typeOptions: FilterOption<EventType>[] = [
   { value: null, label: 'All Types' },
   { value: 'workshop', label: 'Workshop' },
-  { value: 'hackathon', label: 'Hackathon' },
   { value: 'challenge', label: 'Challenge' },
   { value: 'meetup', label: 'Meetup' },
 ];
