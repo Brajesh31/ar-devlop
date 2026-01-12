@@ -116,6 +116,9 @@ try {
     $safe_slug = preg_replace('/[^a-zA-Z0-9_]/', '', str_replace('-', '_', $slug));
     $tableName = "event_{$eventId}_{$safe_slug}";
 
+    // === NEW: Define Foreign Key Constraint Name ===
+    $constraintName = "fk_ev{$eventId}_uid";
+
     $tableSql = "CREATE TABLE IF NOT EXISTS $tableName (
         reg_id INT PRIMARY KEY AUTO_INCREMENT,
         first_name VARCHAR(100) NOT NULL,
@@ -129,8 +132,15 @@ try {
         job_title VARCHAR(150) NOT NULL,
         user_id INT NULL,
         status ENUM('registered','attended','cancelled') DEFAULT 'registered',
-        registered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )";
+        registered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+        -- === RELATION SETUP ===
+        CONSTRAINT $constraintName
+            FOREIGN KEY (user_id)
+            REFERENCES students(user_id)
+            ON DELETE SET NULL
+            ON UPDATE CASCADE
+    ) ENGINE=InnoDB"; // ENGINE=InnoDB is required for Foreign Keys
 
     $conn->exec($tableSql);
 
