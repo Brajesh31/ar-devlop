@@ -1,7 +1,13 @@
 <?php
 // public/api/test_register.php
 ini_set('display_errors', 1);
-require_once '../../config/db.php';
+if (file_exists('../config/db.php')) {
+    require_once '../config/db.php';
+} elseif (file_exists('../../config/db.php')) {
+    require_once '../../config/db.php';
+} else {
+    die("❌ Critical Error: Could not find db.php. Please check if 'api/config/db.php' exists.");
+}
 
 // Simulate a Student Registration
 $data = [
