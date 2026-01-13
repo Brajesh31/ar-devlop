@@ -3,10 +3,11 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { motion } from 'framer-motion';
+import { useNavigate } from 'react-router-dom'; // ✅ Added import
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { useAuth } from '@/hooks/useAuth'; // Ensure this hook exists
+import { useAuth } from '@/hooks/useAuth';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
 
 // Validation Schema
@@ -24,6 +25,7 @@ interface LoginFormProps {
 
 export const LoginForm = ({ onForgotPassword, onSignup }: LoginFormProps) => {
     const { login } = useAuth();
+    const navigate = useNavigate(); // ✅ Initialize navigation
     const [showPassword, setShowPassword] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -37,8 +39,12 @@ export const LoginForm = ({ onForgotPassword, onSignup }: LoginFormProps) => {
         setIsSubmitting(true);
         try {
             // @ts-ignore
-            await login(data);
-            // Redirect is handled inside useAuth or you can add navigate here
+            const result = await login(data); // ✅ Capture login result
+
+            // ✅ Check if login was successful and redirect
+            if (result && result.success) {
+                navigate('/dashboard'); // Redirect to dashboard
+            }
         } catch (error) {
             console.error(error);
         } finally {

@@ -137,12 +137,14 @@ try {
             'status' => 'success',
             'message' => 'Login successful',
             'user' => [
-                'user_id' => $user['user_id'],
-                'first_name' => $user['first_name'],
-                'last_name' => $user['last_name'],
-                'email' => $user['email'],
-                'user_type' => $user['user_type']
-            ]
+                            'user_id' => $user['user_id'],
+                            'name' => $user['first_name'] . ' ' . $user['last_name'], // ✅ ADD THIS LINE
+                            'first_name' => $user['first_name'],
+                            'last_name' => $user['last_name'],
+                            'email' => $user['email'],
+                            'role' => $user['user_type'], // ✅ Ensure this matches your frontend 'AuthUser' type
+                            'user_type' => $user['user_type']
+                        ]
         ]);
 
     } else {
