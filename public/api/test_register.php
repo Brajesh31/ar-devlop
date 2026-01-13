@@ -3,15 +3,13 @@
 ini_set('display_errors', 1);
 error_reporting(E_ALL);
 
-// FIX: Correct path logic for being inside /api/ folder
-// We need to look into ./config/db.php
-$path = __DIR__ . '/config/db.php';
+// FIX: Correct path to db.php from public/api/
+$dbPath = __DIR__ . '/config/db.php';
 
-if (file_exists($path)) {
-    require_once $path;
+if (file_exists($dbPath)) {
+    require_once $dbPath;
 } else {
-    // Fallback debugging
-    die("❌ Critical Error: Could not find db.php at: " . $path);
+    die("❌ Critical Error: Could not find db.php at: $dbPath");
 }
 
 // Simulate a Student Registration
@@ -41,11 +39,19 @@ curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
 
 $response = curl_exec($ch);
 
+echo "<h1>Registration Test Result:</h1>";
+
 if(curl_errno($ch)){
-    echo 'Curl error: ' . curl_error($ch);
+    echo '<h3 style="color:red">Curl Error: ' . curl_error($ch) . '</h3>';
+} else {
+    // Check HTTP Code
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    if ($httpCode !== 200) {
+        echo "<h3 style='color:red'>HTTP Error Code: $httpCode</h3>";
+    }
 }
+
 curl_close($ch);
 
-echo "<h1>Registration Test Result:</h1>";
 echo "<pre>" . htmlspecialchars($response) . "</pre>";
 ?>

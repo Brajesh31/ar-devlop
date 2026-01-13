@@ -2,7 +2,6 @@
 // public/api/auth/register.php
 
 // 1. CONFIGURATION & HEADERS
-// --------------------------------------------------
 $allowed_origins = [
     "http://localhost:5173",
     "https://bharatxr.edtech-community.com",
@@ -18,11 +17,17 @@ if (isset($_SERVER['HTTP_ORIGIN']) && in_array($_SERVER['HTTP_ORIGIN'], $allowed
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') exit(0);
 header('Content-Type: application/json');
 
-// Disable HTML error output so it doesn't break JSON
 ini_set('display_errors', 0);
 error_reporting(E_ALL);
 
-require_once '../../config/db.php';
+// --- FIX: CORRECT PATH TO DB (Up 1 level, not 2) ---
+if (file_exists(__DIR__ . '/../config/db.php')) {
+    require_once __DIR__ . '/../config/db.php';
+} else {
+    http_response_code(500);
+    echo json_encode(['status' => 'error', 'message' => 'Database configuration file missing. Checked: ' . __DIR__ . '/../config/db.php']);
+    exit;
+}
 
 // Helper to return JSON error
 function sendError($msg, $code = 400) {
@@ -33,7 +38,6 @@ function sendError($msg, $code = 400) {
 
 try {
     // 2. INPUT & VALIDATION
-    // --------------------------------------------------
     $input = json_decode(file_get_contents('php://input'), true);
     if (!$input) sendError("Invalid JSON input");
 
@@ -51,14 +55,12 @@ try {
     $password = $input['password'];
     $userType = $input['user_type'];
 
-    // FIX: Match the frontend field names (linkedin_url, github_url)
     $linkedin = $input['linkedin_url'] ?? null;
     $github = $input['github_url'] ?? null;
 
     if (strlen($phone) !== 10) sendError("Phone number must be valid 10 digits");
 
     // 3. CHECK DUPLICATES
-    // --------------------------------------------------
     $stmt = $conn->prepare("SELECT user_id FROM users WHERE email = ? OR phone = ?");
     $stmt->execute([$email, $phone]);
     if ($stmt->rowCount() > 0) {
@@ -67,7 +69,6 @@ try {
 
     // =================================================================
     // 4. PHASE 1: PREPARE DIRECTORY & TABLES (DDL)
-    // Runs BEFORE transaction to avoid "Implicit Commit" crashes
     // =================================================================
 
     function ensureTableExists($conn, $tableName, $type) {
@@ -104,18 +105,14 @@ try {
             $dirTable = "directory_colleges_pg"; $idCol = "college_id"; $nameCol = "college_name"; $prefix = "college_pg";
         }
 
-        // Check if institution exists
         $stmt = $conn->prepare("SELECT $idCol, dynamic_table_name FROM $dirTable WHERE $nameCol = ?");
         $stmt->execute([trim($name)]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
         if ($row) {
-            // Found: Ensure table exists physically
             ensureTableExists($conn, $row['dynamic_table_name'], $type);
             return ['id' => $row[$idCol], 'tableName' => $row['dynamic_table_name'], 'isNew' => false];
         } else {
-            // New: We need to insert directory entry and create table
-            // We do directory insert here to get the ID for table name
             $stmtIns = $conn->prepare("INSERT INTO $dirTable ($nameCol, student_count) VALUES (?, 0)");
             $stmtIns->execute([trim($name)]);
             $newId = $conn->lastInsertId();
@@ -123,10 +120,7 @@ try {
             $tableName = "{$prefix}_{$newId}_{$cleanName}";
             if (strlen($tableName) > 60) $tableName = substr($tableName, 0, 60);
 
-            // Update with table name
             $conn->prepare("UPDATE $dirTable SET dynamic_table_name = ? WHERE $idCol = ?")->execute([$tableName, $newId]);
-
-            // Create Physical Table
             ensureTableExists($conn, $tableName, $type);
 
             return ['id' => $newId, 'tableName' => $tableName, 'isNew' => true];
@@ -144,9 +138,8 @@ try {
     }
 
     // =================================================================
-    // 5. PHASE 2: INSERT USER & DATA (ATOMIC TRANSACTION)
+    // 5. PHASE 2: INSERT USER & DATA
     // =================================================================
-    $conn->beginTransaction();
 
     // A. Create User
     $passHash = password_hash($password, PASSWORD_BCRYPT);
@@ -163,19 +156,15 @@ try {
     if ($userType === 'school') {
         $classGrade = $input['class_grade'] ?? '';
 
-        // 1. Increment Student Count (if existing)
         if (!$meta['isNew']) {
             $conn->prepare("UPDATE directory_schools SET student_count = student_count + 1 WHERE school_id = ?")->execute([$meta['id']]);
         } else {
-            // If new, set count to 1
             $conn->prepare("UPDATE directory_schools SET student_count = 1 WHERE school_id = ?")->execute([$meta['id']]);
         }
 
-        // 2. Link Profile
         $conn->prepare("INSERT INTO profiles_school (user_id, school_id, class_grade) VALUES (?, ?, ?)")
              ->execute([$userId, $meta['id'], $classGrade]);
 
-        // 3. Add to Dynamic Table
         $conn->prepare("INSERT INTO `{$meta['tableName']}` (user_id, first_name, last_name, class_grade) VALUES (?, ?, ?, ?)")
              ->execute([$userId, $firstName, $lastName, $classGrade]);
 
@@ -187,18 +176,15 @@ try {
         $branch = $input['branch'] ?? '';
         $stream = $input['stream'] ?? '';
 
-        // 1. Update Count
         if (!$meta['isNew']) {
             $conn->prepare("UPDATE $dirTable SET student_count = student_count + 1 WHERE $idCol = ?")->execute([$meta['id']]);
         } else {
             $conn->prepare("UPDATE $dirTable SET student_count = 1 WHERE $idCol = ?")->execute([$meta['id']]);
         }
 
-        // 2. Link Profile
         $conn->prepare("INSERT INTO $tableProfile (user_id, college_id, branch, stream) VALUES (?, ?, ?, ?)")
              ->execute([$userId, $meta['id'], $branch, $stream]);
 
-        // 3. Add to Dynamic Table
         $conn->prepare("INSERT INTO `{$meta['tableName']}` (user_id, first_name, last_name, branch, stream) VALUES (?, ?, ?, ?, ?)")
              ->execute([$userId, $firstName, $lastName, $branch, $stream]);
 
@@ -209,8 +195,6 @@ try {
              ->execute([$userId, $input['job_role']]);
     }
 
-    $conn->commit();
-
     echo json_encode([
         'status' => 'success',
         'message' => 'Registration successful',
@@ -218,14 +202,7 @@ try {
     ]);
 
 } catch (Exception $e) {
-    if ($conn->inTransaction()) {
-        $conn->rollBack();
-    }
-
-    // Log error to server
     error_log("REGISTER ERROR: " . $e->getMessage());
-
-    // Return specific error
     http_response_code(500);
     echo json_encode(['status' => 'error', 'message' => "Registration Failed: " . $e->getMessage()]);
 }
