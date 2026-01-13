@@ -4,6 +4,7 @@
 // 1. CORS & Headers
 $allowed_origins = [
     "http://localhost:5173",
+    "http://localhost:8083",
     "https://bharatxr.edtech-community.com",
     "https://bharatxr.co"
 ];
@@ -48,7 +49,7 @@ try {
 
     if (!$user) {
         http_response_code(400);
-        echo json_encode(['status' => 'error', 'message' => 'Invalid or expired token.']);
+        echo json_encode(['status' => 'error', 'message' => 'Invalid or expired token. Please request a new link.']);
         exit;
     }
 
