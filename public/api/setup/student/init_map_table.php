@@ -4,17 +4,19 @@
 header('Content-Type: application/json');
 
 // 1. Load Database Config
-// Adjust path to match your folder structure: public/api/setup/student/ -> public/api/config/
 require_once '../../config/db.php';
 
 try {
-    // 2. SQL to Create the Master Map Table
-    // We use constraints to create visible relationships in phpMyAdmin Designer
-    $sql = "CREATE TABLE IF NOT EXISTS `user_event_map` (
-        `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    // Enable error reporting for detailed SQL errors
+    $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
-        `user_id` INT(11) NOT NULL,
-        `event_id` INT(11) NOT NULL,
+    // 2. SQL to Create the Master Map Table
+    $sql = "CREATE TABLE IF NOT EXISTS `user_event_map` (
+        `id` BIGINT NOT NULL AUTO_INCREMENT,
+
+        -- ✅ FIXED: Removed 'UNSIGNED' to match your 'users' and 'events' tables
+        `user_id` INT NOT NULL,
+        `event_id` INT NOT NULL,
 
         `registration_table` VARCHAR(255) NOT NULL,
         `registered_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -22,21 +24,20 @@ try {
         PRIMARY KEY (`id`),
 
         -- 🚀 PERFORMANCE INDEXES
-        -- These make the Student Dashboard load instantly
         INDEX `idx_user_fast_lookup` (`user_id`),
         INDEX `idx_event_lookup` (`event_id`),
 
         -- 🛡️ DUPLICATE PROTECTION
-        -- Prevents a student from registering for the same event ID twice
         UNIQUE KEY `unique_user_event` (`user_id`, `event_id`),
 
         -- 🔗 VISIBLE RELATIONS (Foreign Keys)
-        -- These lines tell the database: 'This user_id MUST exist in the users table'
+        -- ✅ FIXED: referencing 'user_id' instead of 'id'
         CONSTRAINT `fk_map_user`
-            FOREIGN KEY (`user_id`) REFERENCES `users` (`id`)
+            FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`)
             ON DELETE CASCADE
             ON UPDATE CASCADE,
 
+        -- ✅ FIXED: removed UNSIGNED to match parent table
         CONSTRAINT `fk_map_event`
             FOREIGN KEY (`event_id`) REFERENCES `events` (`event_id`)
             ON DELETE CASCADE
