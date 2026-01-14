@@ -3,7 +3,7 @@
 
 // 1. CONFIGURATION & HEADERS
 $allowed_origins = [
-    "http://localhost:5173",
+    "http://localhost:8080",
     "https://bharatxr.edtech-community.com",
     "https://bharatxr.co"
 ];

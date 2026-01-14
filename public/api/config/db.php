@@ -18,7 +18,7 @@ session_set_cookie_params([
 
 // 3. CORS Headers
 $allowed_origins = [
-    "http://localhost:8083",
+    "http://localhost:8080",
     "https://bharatxr.edtech-community.com"
 ];
 

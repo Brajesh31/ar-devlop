@@ -1,7 +1,7 @@
 /**
  * Authentication Hook
  * Manages user authentication state and provides unified access to all Auth APIs
- * * STATUS: Updated for Login, Signup, Forgot Password, and Reset Password
+ * * STATUS: Fully Integrated with Student & Admin Flows
  */
 
 import { useState, useEffect, useCallback } from 'react';
@@ -18,17 +18,27 @@ export const useAuth = () => {
 
   // 1. Load user from local storage on mount
   useEffect(() => {
-    const storedUser = localStorage.getItem(AUTH_STORAGE_KEY);
-    if (storedUser) {
-      try {
-        const parsed = JSON.parse(storedUser);
-        setUser(parsed);
-        setIsAuthenticated(true);
-      } catch {
-        localStorage.removeItem(AUTH_STORAGE_KEY);
+    const initializeAuth = () => {
+      const storedUser = localStorage.getItem(AUTH_STORAGE_KEY);
+      if (storedUser) {
+        try {
+          const parsed = JSON.parse(storedUser);
+          if (parsed && parsed.user_id) {
+            setUser(parsed);
+            setIsAuthenticated(true);
+          } else {
+            // Invalid data found
+            localStorage.removeItem(AUTH_STORAGE_KEY);
+          }
+        } catch (e) {
+          console.error("Auth parsing error", e);
+          localStorage.removeItem(AUTH_STORAGE_KEY);
+        }
       }
-    }
-    setIsLoading(false);
+      setIsLoading(false); // ✅ Always ensure loading stops
+    };
+
+    initializeAuth();
   }, []);
 
   // 2. Login Function
@@ -46,10 +56,9 @@ export const useAuth = () => {
 
         toast({
           title: 'Login Successful',
-          description: `Welcome back, ${authUser.name}!`,
+          description: `Welcome back, ${authUser.name || 'Student'}!`,
         });
 
-        // Return result for redirect logic in UI
         return { success: true, user: authUser, redirect: result.redirect };
       } else {
         toast({
@@ -105,7 +114,7 @@ export const useAuth = () => {
     }
   }, [toast]);
 
-  // 4. Forgot Password Function (NEW)
+  // 4. Forgot Password Function
   const forgotPassword = useCallback(async (email: string) => {
     try {
       const result = await authService.forgotPassword(email);
@@ -128,7 +137,7 @@ export const useAuth = () => {
     }
   }, [toast]);
 
-  // 5. Reset Password Function (NEW)
+  // 5. Reset Password Function
   const resetPassword = useCallback(async (token: string, password: string) => {
     try {
       const result = await authService.resetPassword(token, password);
@@ -154,10 +163,11 @@ export const useAuth = () => {
   // 6. Logout Function
   const logout = useCallback(async () => {
     try {
-      // Optional: Call backend logout if needed
-      // await authService.logout();
+      // Attempt backend logout to clear HttpOnly cookies
+      await authService.logout();
     } catch (error) {
-      console.error('Logout error:', error);
+      // Ignore network errors during logout
+      console.warn('Backend logout failed, clearing local state anyway.');
     } finally {
       setUser(null);
       setIsAuthenticated(false);
@@ -171,12 +181,12 @@ export const useAuth = () => {
 
   // Role Helpers
   const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
-  const isStudent = ['school', 'undergraduate', 'graduate'].includes(user?.role || '');
+  const isStudent = ['school', 'undergraduate', 'graduate', 'student'].includes(user?.role || '');
   const isProfessional = user?.role === 'professional';
 
   return {
     user,
-    isLoading,
+    isLoading, // ✅ Critical for StudentLayout
     isAuthenticated,
     isAdmin,
     isStudent,
@@ -184,8 +194,8 @@ export const useAuth = () => {
     login,
     signup,
     logout,
-    forgotPassword, // Exposed new method
-    resetPassword,  // Exposed new method
+    forgotPassword,
+    resetPassword,
   };
 };
 

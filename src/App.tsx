@@ -41,7 +41,11 @@ import Dashboard from "./pages/Admin/Dashboard";
 import EventsList from "./pages/Admin/Events/EventsList";
 import CreateEvent from "./pages/Admin/Events/CreateEvent";
 import EventAnalytics from "./pages/Admin/Events/EventAnalytics";
-import OverallEventAnalytics from "./pages/Admin/Events/OverallEventAnalytics"; // ✅ Added Import
+import OverallEventAnalytics from "./pages/Admin/Events/OverallEventAnalytics";
+
+// --- Student Pages (NEW) ---
+import StudentLayout from "./components/layout/StudentLayout";
+import StudentDashboard from "./pages/Student/Dashboard";
 
 const queryClient = new QueryClient();
 
@@ -94,17 +98,28 @@ const App = () => (
 
                   {/* Events Management Routes */}
                   <Route path="events" element={<EventsList />} />
-                  <Route path="events/list" element={<EventsList />} /> {/* ✅ Matches Sidebar Link */}
+                  <Route path="events/list" element={<EventsList />} />
 
                   <Route path="events/create" element={<CreateEvent />} />
-                  <Route path="events/edit/:id" element={<CreateEvent />} /> {/* ✅ Enables Editing */}
+                  <Route path="events/edit/:id" element={<CreateEvent />} />
 
-                  {/* Analytics must come before :id to prevent conflict */}
-                  <Route path="events/analytics" element={<OverallEventAnalytics />} /> {/* ✅ Overall Stats */}
-                  <Route path="events/:id" element={<EventAnalytics />} />  {/* ✅ Specific Event */}
+                  {/* Analytics */}
+                  <Route path="events/analytics" element={<OverallEventAnalytics />} />
+                  <Route path="events/:id" element={<EventAnalytics />} />
+                </Route>
 
-                  {/* Future Admin Routes */}
-                  {/* <Route path="hackathons/create" element={<CreateHackathon />} /> */}
+                {/* === PROTECTED STUDENT DASHBOARD (NEW) === */}
+                <Route path="/student" element={<StudentLayout />}>
+                  <Route index element={<Navigate to="/student/dashboard" replace />} />
+                  <Route path="dashboard" element={<StudentDashboard />} />
+
+                  {/* Placeholders for Future Pages */}
+                  <Route path="events" element={<div className="p-10 text-center text-slate-500">My Events Page (Coming Soon)</div>} />
+                  <Route path="hackathons" element={<div className="p-10 text-center text-slate-500">My Hackathons Page (Coming Soon)</div>} />
+                  <Route path="showcase" element={<div className="p-10 text-center text-slate-500">Showcase Page (Coming Soon)</div>} />
+                  <Route path="lens" element={<div className="p-10 text-center text-slate-500">Lens Studio Page (Coming Soon)</div>} />
+                  <Route path="surveys" element={<div className="p-10 text-center text-slate-500">Surveys Page (Coming Soon)</div>} />
+                  <Route path="profile" element={<div className="p-10 text-center text-slate-500">Profile Page (Coming Soon)</div>} />
                 </Route>
 
                 {/* === 404 FALLBACK === */}

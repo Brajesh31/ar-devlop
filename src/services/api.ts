@@ -1,7 +1,7 @@
 /**
  * API Service Layer
  * Connects frontend components to PHP backend APIs using Axios
- * * STATUS: Admin Auth, Admin Events, Public Auth (Login/Register/Reset) & Events
+ * * STATUS: Admin Auth, Admin Events, Public Auth, Student Dashboard
  */
 
 import axios, { AxiosError, AxiosRequestConfig } from 'axios';
@@ -11,7 +11,7 @@ import { API_CONFIG } from '@/config/api';
 // 1. AXIOS CONFIGURATION
 // ============================================================================
 
-const api = axios.create({
+export const apiClient = axios.create({
   baseURL: API_CONFIG.baseUrl,
   withCredentials: true, // Important: Handles cookies for sessions
   headers: {
@@ -53,7 +53,24 @@ export interface AuthUser {
   role: string;
   name: string;
   is_permanent?: boolean;
-  institution?: string; // Added to support student dashboard
+  institution?: string;
+}
+
+// Student Dashboard Types
+export interface StudentStats {
+  eventsRegistered: number;
+  hackathonsParticipated: number;
+  projectsShowcased: number;
+  lensesSubmitted: number;
+  nextEventDate?: string;
+}
+
+export interface UpcomingActivity {
+  id: string;
+  title: string;
+  type: 'event' | 'hackathon' | 'workshop';
+  date: string;
+  image?: string;
 }
 
 // ============================================================================
@@ -65,7 +82,7 @@ async function apiRequest<T>(
     options: AxiosRequestConfig = {}
 ): Promise<ApiResponse<T>> {
   try {
-    const response = await api.request<ApiResponse<T>>({
+    const response = await apiClient.request<ApiResponse<T>>({
       url: endpoint,
       ...options,
     });
@@ -115,9 +132,8 @@ export const authService = {
     return apiRequest('/admin/auth/logout.php', { method: 'POST' });
   },
 
-  // --- STUDENT / PUBLIC AUTH (UPDATED) ---
+  // --- STUDENT / PUBLIC AUTH ---
 
-  // Login with Identifier (Email/Phone) & Password
   login: async (credentials: PublicLoginCredentials) => {
     return apiRequest<any>('/auth/login.php', {
       method: 'POST',
@@ -125,7 +141,6 @@ export const authService = {
     });
   },
 
-  // Register with full profile data
   register: async (data: any) => {
     return apiRequest<any>('/auth/register.php', {
       method: 'POST',
@@ -133,7 +148,6 @@ export const authService = {
     });
   },
 
-  // Forgot Password (Request Link) - ADDED THIS
   forgotPassword: async (email: string) => {
     return apiRequest<any>('/auth/forgot_password.php', {
       method: 'POST',
@@ -141,7 +155,6 @@ export const authService = {
     });
   },
 
-  // Reset Password (Submit new password with token) - ADDED THIS
   resetPassword: async (token: string, password: string) => {
     return apiRequest<any>('/auth/reset_password.php', {
       method: 'POST',
@@ -177,7 +190,6 @@ export const adminService = {
     const formData = new FormData();
     formData.append('file', file);
 
-    // Direct Axios call to handle multipart/form-data correctly
     try {
       const response = await axios.post(`${API_CONFIG.baseUrl}/admin/media/upload.php`, formData);
       return response.data;
@@ -189,17 +201,14 @@ export const adminService = {
 
   // === EVENTS MANAGEMENT ===
   events: {
-    // 1. List All Events (Admin View)
     list: async () => {
       return apiRequest<any[]>('/admin/events/list.php');
     },
 
-    // 2. Get Single Event + Registrations (Analytics)
     getDetails: async (id: string) => {
       return apiRequest<any>(`/admin/events/get_details.php?id=${id}`);
     },
 
-    // 3. Create Event
     create: async (data: any) => {
       return apiRequest('/admin/events/create.php', {
         method: 'POST',
@@ -207,7 +216,6 @@ export const adminService = {
       });
     },
 
-    // 4. Update Event
     update: async (data: any) => {
       return apiRequest('/admin/events/update.php', {
         method: 'POST',
@@ -215,7 +223,6 @@ export const adminService = {
       });
     },
 
-    // 5. Delete Event
     delete: async (eventId: number | string) => {
       return apiRequest('/admin/events/delete.php', {
         method: 'POST',
@@ -231,22 +238,65 @@ export const adminService = {
 
 export const publicService = {
   events: {
-    // 1. List Published Events (Public View)
     list: async () => {
       const response = await axios.get(`${API_CONFIG.baseUrl}/events/list.php`);
       return response.data;
     },
 
-    // 2. Get Single Event Details (Public View)
     getById: async (id: string) => {
       const response = await axios.get(`${API_CONFIG.baseUrl}/events/get.php?id=${id}`);
       return response.data;
     },
 
-    // 3. Register for Event (Saves to Dynamic Table)
     register: async (data: any) => {
       const response = await axios.post(`${API_CONFIG.baseUrl}/events/register.php`, data);
       return response.data;
     }
+  }
+};
+
+// ============================================================================
+// 6. STUDENT SERVICES (New)
+// ============================================================================
+
+export const studentService = {
+  // 1. Get Dashboard Overview Stats
+  getStats: async (): Promise<StudentStats> => {
+    // TODO: Replace with actual backend call when ready
+    // return apiRequest<StudentStats>('/student/dashboard/stats.php');
+
+    // Mock Data for UI Development
+    return new Promise((resolve) => {
+      setTimeout(() => resolve({
+        eventsRegistered: 12,
+        hackathonsParticipated: 3,
+        projectsShowcased: 5,
+        lensesSubmitted: 2,
+        nextEventDate: "2025-09-15T10:00:00"
+      }), 800);
+    });
+  },
+
+  // 2. Get Upcoming Activities
+  getUpcoming: async (): Promise<UpcomingActivity[]> => {
+    // TODO: Replace with actual backend call
+
+    return new Promise((resolve) => {
+      setTimeout(() => resolve([
+        {
+          id: '1',
+          title: 'Advanced AR Workshop',
+          type: 'workshop',
+          date: '2025-09-15T10:00:00',
+          image: '/src/assets/bharat-xr-hero.png'
+        },
+        {
+          id: '2',
+          title: 'Lensathon 2.0',
+          type: 'hackathon',
+          date: '2025-10-01T09:00:00'
+        }
+      ]), 1000);
+    });
   }
 };
