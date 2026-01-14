@@ -128,7 +128,9 @@ try {
         city VARCHAR(100) NOT NULL,
         organization_name VARCHAR(255) NOT NULL,
         job_title VARCHAR(150) NOT NULL,
+
         user_id INT NULL,
+        KEY idx_uid (user_id), -- ✅ ADDED: Performance Index for Analytics
 
         -- === NEW: Link Column ===
         -- We store the event_id in every row to create the physical link

@@ -48,7 +48,7 @@ import StudentLayout from "./components/layout/StudentLayout";
 import StudentDashboard from "./pages/Student/Dashboard";
 
 // ⚠️ Uncomment these imports once you create the files
-// import MyEvents from "./pages/Student/MyEvents";
+import MyEvents from "./pages/Student/MyEvents";
 // import MyHackathons from "./pages/Student/MyHackathons";
 // import ShowcaseSubmission from "./pages/Student/Showcase/ShowcaseSubmission";
 // import LensSubmission from "./pages/Student/Lens/LensSubmission";
@@ -116,7 +116,7 @@ const App = () => (
                   {/* ✅ REAL PAGE STRUCTURE (Commented out to prevent crashes)
                       If these files are missing, the wildcard route below redirects to 404.
                   */}
-                  {/* <Route path="events" element={<MyEvents />} /> */}
+                  <Route path="events" element={<MyEvents />} />
                   {/* <Route path="hackathons" element={<MyHackathons />} /> */}
                   {/* <Route path="showcase" element={<ShowcaseSubmission />} /> */}
                   {/* <Route path="lens" element={<LensSubmission />} /> */}

@@ -5,7 +5,12 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { authService, AuthUser, PublicLoginCredentials } from '@/services/api';
+import {
+  authService,
+  AuthUser,
+  PublicLoginCredentials,
+  LoginCredentials
+} from '@/services/api';
 import { useToast } from '@/hooks/use-toast';
 
 const AUTH_STORAGE_KEY = 'bharatxr_auth_user';
@@ -27,7 +32,6 @@ export const useAuth = () => {
             setUser(parsed);
             setIsAuthenticated(true);
           } else {
-            // Invalid data found
             localStorage.removeItem(AUTH_STORAGE_KEY);
           }
         } catch (e) {
@@ -35,13 +39,13 @@ export const useAuth = () => {
           localStorage.removeItem(AUTH_STORAGE_KEY);
         }
       }
-      setIsLoading(false); // ✅ Always ensure loading stops
+      setIsLoading(false);
     };
 
     initializeAuth();
   }, []);
 
-  // 2. Login Function
+  // 2. Student / Public Login Function
   const login = useCallback(async (credentials: PublicLoginCredentials) => {
     setIsLoading(true);
     try {
@@ -81,7 +85,48 @@ export const useAuth = () => {
     }
   }, [toast]);
 
-  // 3. Signup Function
+  // 3. Admin Login Function (NEW)
+  const adminLogin = useCallback(async (credentials: LoginCredentials) => {
+    setIsLoading(true);
+    try {
+      const result = await authService.adminLogin(credentials);
+
+      if (result.status === 'success' && result.data) {
+        // Note: Admin API returns data in 'data' field usually, or check structure
+        const authUser: AuthUser = result.data;
+
+        setUser(authUser);
+        setIsAuthenticated(true);
+        localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(authUser));
+
+        toast({
+          title: 'Admin Access Granted',
+          description: `Welcome, Administrator.`,
+        });
+
+        return { success: true, user: authUser };
+      } else {
+        toast({
+          title: 'Access Denied',
+          description: result.message || 'Invalid admin credentials',
+          variant: 'destructive',
+        });
+        return { success: false, message: result.message };
+      }
+    } catch (error) {
+      console.error('Admin Login error:', error);
+      toast({
+        title: 'Error',
+        description: 'Server connection failed',
+        variant: 'destructive',
+      });
+      return { success: false, message: 'Network error' };
+    } finally {
+      setIsLoading(false);
+    }
+  }, [toast]);
+
+  // 4. Signup Function
   const signup = useCallback(async (data: any) => {
     setIsLoading(true);
     try {
@@ -114,7 +159,7 @@ export const useAuth = () => {
     }
   }, [toast]);
 
-  // 4. Forgot Password Function
+  // 5. Forgot Password Function
   const forgotPassword = useCallback(async (email: string) => {
     try {
       const result = await authService.forgotPassword(email);
@@ -137,7 +182,7 @@ export const useAuth = () => {
     }
   }, [toast]);
 
-  // 5. Reset Password Function
+  // 6. Reset Password Function
   const resetPassword = useCallback(async (token: string, password: string) => {
     try {
       const result = await authService.resetPassword(token, password);
@@ -160,13 +205,11 @@ export const useAuth = () => {
     }
   }, [toast]);
 
-  // 6. Logout Function
+  // 7. Logout Function
   const logout = useCallback(async () => {
     try {
-      // Attempt backend logout to clear HttpOnly cookies
       await authService.logout();
     } catch (error) {
-      // Ignore network errors during logout
       console.warn('Backend logout failed, clearing local state anyway.');
     } finally {
       setUser(null);
@@ -186,12 +229,13 @@ export const useAuth = () => {
 
   return {
     user,
-    isLoading, // ✅ Critical for StudentLayout
+    isLoading,
     isAuthenticated,
     isAdmin,
     isStudent,
     isProfessional,
     login,
+    adminLogin, // ✅ Added for Admin Pages
     signup,
     logout,
     forgotPassword,

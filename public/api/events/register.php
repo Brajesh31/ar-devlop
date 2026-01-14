@@ -1,10 +1,15 @@
 <?php
 // public/api/events/register.php
 
-// 1. Setup & Headers
+// 1. Start Session & Headers
+session_start();
 ob_start();
-header("Access-Control-Allow-Origin: {$_SERVER['HTTP_ORIGIN']}");
-header('Access-Control-Allow-Credentials: true');
+
+// Handle CORS
+if (isset($_SERVER['HTTP_ORIGIN'])) {
+    header("Access-Control-Allow-Origin: {$_SERVER['HTTP_ORIGIN']}");
+    header('Access-Control-Allow-Credentials: true');
+}
 header('Content-Type: application/json');
 header("Access-Control-Allow-Methods: POST, OPTIONS");
 header("Access-Control-Allow-Headers: Content-Type");
@@ -16,13 +21,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 require_once '../config/db.php';
 
-// 2. Get Input
+// 2. AUTHENTICATION CHECK (The Gatekeeper)
+if (!isset($_SESSION['user_id'])) {
+    ob_end_clean();
+    http_response_code(401);
+    echo json_encode(["status" => "error", "message" => "Please log in to register for this event."]);
+    exit;
+}
+
+$user_id = $_SESSION['user_id'];
 $input = file_get_contents("php://input");
 $data = json_decode($input, true);
 
-// 3. Validation - UPDATED: Added 'dob' to required fields
-$required = ['event_id', 'first_name', 'last_name', 'email', 'contact_no', 'gender', 'dob', 'city', 'organization', 'role'];
-foreach ($required as $field) {
+if (empty($data['event_id'])) {
+    ob_end_clean();
+    http_response_code(400);
+    echo json_encode(["status" => "error", "message" => "Event ID is missing."]);
+    exit;
+}
+
+// 3. VALIDATE FORM SPECIFIC FIELDS
+// We trust the User ID for name/email, but we still need these inputs from the form
+$requiredFormFields = ['gender', 'dob', 'city', 'organization', 'role'];
+foreach ($requiredFormFields as $field) {
     if (empty($data[$field])) {
         ob_end_clean();
         http_response_code(400);
@@ -34,9 +55,20 @@ foreach ($required as $field) {
 $identifier = $data['event_id'];
 
 try {
-    // 4. Find the Event & Dynamic Table Name
-    // UPDATED LOGIC: Support both ID (Numeric) and Slug (String)
-    $sql = "SELECT registration_table_name, title, registration_deadline, start_date FROM events WHERE ";
+    $conn->beginTransaction();
+
+    // 4. FETCH VERIFIED USER DATA (Identity Protection)
+    // We do NOT trust the name/email sent from the form. We pull it from the DB.
+    $userStmt = $conn->prepare("SELECT first_name, last_name, email, phone FROM users WHERE user_id = ?");
+    $userStmt->execute([$user_id]);
+    $user = $userStmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$user) {
+        throw new Exception("User account not found.");
+    }
+
+    // 5. FIND EVENT & TABLE NAME
+    $sql = "SELECT event_id, registration_table_name, title, registration_deadline, start_date FROM events WHERE ";
     $params = [];
 
     if (is_numeric($identifier)) {
@@ -47,66 +79,76 @@ try {
         $params[] = $identifier;
     }
 
-    $stmt = $conn->prepare($sql);
-    $stmt->execute($params);
-    $event = $stmt->fetch(PDO::FETCH_ASSOC);
+    $evtStmt = $conn->prepare($sql);
+    $evtStmt->execute($params);
+    $event = $evtStmt->fetch(PDO::FETCH_ASSOC);
 
     if (!$event) {
         throw new Exception("Event not found.");
     }
 
     $tableName = $event['registration_table_name'];
+    $actualEventId = $event['event_id'];
 
-    // 5. Security Check: Validate Table Name format
-    if (!preg_match('/^event_\d+_[a-zA-Z0-9_]+$/', $tableName)) {
-        throw new Exception("Invalid registration table configuration.");
-    }
-
-    // 6. Check Deadline
+    // 6. CHECK DEADLINE
     $deadline = !empty($event['registration_deadline']) ? $event['registration_deadline'] : $event['start_date'];
     if (new DateTime() > new DateTime($deadline)) {
         throw new Exception("Registration for this event has closed.");
     }
 
-    // 7. Check for Duplicate Registration (Email)
-    $checkStmt = $conn->prepare("SELECT reg_id FROM $tableName WHERE email = ?");
-    $checkStmt->execute([$data['email']]);
-    if ($checkStmt->rowCount() > 0) {
-        throw new Exception("You have already registered for this event with this email.");
+    // 7. CHECK FOR DUPLICATE REGISTRATION (Using Map Table for speed)
+    $checkMap = $conn->prepare("SELECT id FROM user_event_map WHERE user_id = ? AND event_id = ?");
+    $checkMap->execute([$user_id, $actualEventId]);
+    if ($checkMap->rowCount() > 0) {
+        throw new Exception("You are already registered for this event.");
     }
 
-    // 8. Insert into Dynamic Table
-    $sql = "INSERT INTO $tableName (
-        first_name, last_name, email, contact_no, dob, gender,
-        city, organization_name, job_title,
+    // 8. WRITE 1: Insert into DYNAMIC ADMIN TABLE
+    // We use the VERIFIED user data here + form specific data (like organization/role)
+    $sqlDynamic = "INSERT INTO $tableName (
+        user_id, first_name, last_name, email, contact_no,
+        dob, gender, city, organization_name, job_title,
         status, registered_at
     ) VALUES (
-        :fname, :lname, :email, :phone, :dob, :gender,
-        :city, :org, :role,
+        :uid, :fname, :lname, :email, :phone,
+        :dob, :gender, :city, :org, :role,
         'registered', NOW()
     )";
 
-    $insertStmt = $conn->prepare($sql);
+    $insertStmt = $conn->prepare($sqlDynamic);
     $insertStmt->execute([
-        ':fname'  => $data['first_name'],
-        ':lname'  => $data['last_name'],
-        ':email'  => $data['email'],
-        ':phone'  => $data['contact_no'],
-        ':dob'    => $data['dob'], // Now required, so no ?? NULL fallback needed
-        ':gender' => $data['gender'],
-        ':city'   => $data['city'],
-        ':org'    => $data['organization'],
-        ':role'   => $data['role']
+        ':uid'    => $user_id,
+        ':fname'  => $user['first_name'], // Verified from DB
+        ':lname'  => $user['last_name'],  // Verified from DB
+        ':email'  => $user['email'],      // Verified from DB
+        ':phone'  => $user['phone'],      // Verified from DB
+        ':dob'    => $data['dob'],        // From Form
+        ':gender' => $data['gender'],     // From Form
+        ':city'   => $data['city'],       // From Form
+        ':org'    => $data['organization'], // From Form
+        ':role'   => $data['role']        // From Form
     ]);
+
+    // 9. WRITE 2: Insert into MASTER MAP TABLE (For Student Dashboard)
+    // This allows us to instantly show 'My Events' without scanning 100 tables
+    $sqlMap = "INSERT IGNORE INTO user_event_map (user_id, event_id, registration_table) VALUES (?, ?, ?)";
+    $mapStmt = $conn->prepare($sqlMap);
+    $mapStmt->execute([$user_id, $actualEventId, $tableName]);
+
+    $conn->commit();
 
     ob_end_clean();
     echo json_encode([
         "status" => "success",
         "message" => "Registration successful!",
-        "event_title" => $event['title']
+        "event_title" => $event['title'],
+        "redirect" => "/student/events"
     ]);
 
 } catch (Exception $e) {
+    if ($conn->inTransaction()) {
+        $conn->rollBack();
+    }
     ob_end_clean();
     http_response_code(400);
     echo json_encode(["status" => "error", "message" => $e->getMessage()]);

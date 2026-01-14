@@ -23,7 +23,7 @@ export const apiClient = axios.create({
 // 2. TYPES & INTERFACES
 // ============================================================================
 
-interface ApiResponse<T = any> {
+export interface ApiResponse<T = any> {
   user_id: any;
   redirect: any;
   status: 'success' | 'error';
@@ -33,6 +33,7 @@ interface ApiResponse<T = any> {
   registrations?: any[]; // specific to get_details
   message?: string;
   url?: string;   // specific to upload
+  count?: number;
 }
 
 // Admin Login Credentials (Email only)
@@ -256,47 +257,23 @@ export const publicService = {
 };
 
 // ============================================================================
-// 6. STUDENT SERVICES (New)
+// 6. STUDENT SERVICES (Authenticated)
 // ============================================================================
 
 export const studentService = {
-  // 1. Get Dashboard Overview Stats
-  getStats: async (): Promise<StudentStats> => {
-    // TODO: Replace with actual backend call when ready
-    // return apiRequest<StudentStats>('/student/dashboard/stats.php');
 
-    // Mock Data for UI Development
-    return new Promise((resolve) => {
-      setTimeout(() => resolve({
-        eventsRegistered: 12,
-        hackathonsParticipated: 3,
-        projectsShowcased: 5,
-        lensesSubmitted: 2,
-        nextEventDate: "2025-09-15T10:00:00"
-      }), 800);
-    });
+  // 1. Get Registered Events (My Events)
+  getMyEvents: async () => {
+    return apiRequest<any[]>('/student/my_events.php');
   },
 
-  // 2. Get Upcoming Activities
-  getUpcoming: async (): Promise<UpcomingActivity[]> => {
-    // TODO: Replace with actual backend call
+  // 2. Get Dashboard Overview Stats (Real Data)
+  getStats: async () => {
+    return apiRequest<StudentStats>('/student/dashboard/stats.php');
+  },
 
-    return new Promise((resolve) => {
-      setTimeout(() => resolve([
-        {
-          id: '1',
-          title: 'Advanced AR Workshop',
-          type: 'workshop',
-          date: '2025-09-15T10:00:00',
-          image: '/src/assets/bharat-xr-hero.png'
-        },
-        {
-          id: '2',
-          title: 'Lensathon 2.0',
-          type: 'hackathon',
-          date: '2025-10-01T09:00:00'
-        }
-      ]), 1000);
-    });
+  // 3. Get Upcoming Activities (Real Data)
+  getUpcoming: async () => {
+    return apiRequest<UpcomingActivity[]>('/student/dashboard/upcoming.php');
   }
 };
