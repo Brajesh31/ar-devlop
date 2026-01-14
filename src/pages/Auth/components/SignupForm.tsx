@@ -62,12 +62,15 @@ export const SignupForm = ({ onLogin }: SignupFormProps) => {
     const onSubmit = async (data: SignupFormData) => {
         setIsSubmitting(true);
         try {
+            // @ts-ignore
             const result = await signup(data);
-            if (result?.success) {
+
+            // If signup was successful, switch to Login view
+            if (result && result.success) {
                 onLogin();
             }
         } catch (error) {
-            console.error(error);
+            console.error("Signup Error:", error);
         } finally {
             setIsSubmitting(false);
         }
@@ -79,10 +82,6 @@ export const SignupForm = ({ onLogin }: SignupFormProps) => {
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -20 }}
             transition={{ duration: 0.3 }}
-            // === SCROLL LOGIC FIXED HERE ===
-            // Mobile: w-full (Grows with content)
-            // Desktop (lg): Restrict height to 600px, enable scroll, add right padding
-            // 'scrollbar-thin' is optional if you have the plugin, otherwise overflow-y-auto handles it.
             className="w-full lg:max-h-[600px] lg:overflow-y-auto lg:pr-2"
         >
             <div className="mb-6">

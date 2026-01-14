@@ -3,7 +3,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { motion } from 'framer-motion';
-import { useNavigate } from 'react-router-dom'; // ✅ Added import
+import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
@@ -25,7 +25,7 @@ interface LoginFormProps {
 
 export const LoginForm = ({ onForgotPassword, onSignup }: LoginFormProps) => {
     const { login } = useAuth();
-    const navigate = useNavigate(); // ✅ Initialize navigation
+    const navigate = useNavigate();
     const [showPassword, setShowPassword] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -39,14 +39,15 @@ export const LoginForm = ({ onForgotPassword, onSignup }: LoginFormProps) => {
         setIsSubmitting(true);
         try {
             // @ts-ignore
-            const result = await login(data); // ✅ Capture login result
+            const result = await login(data);
 
-            // ✅ Check if login was successful and redirect
             if (result && result.success) {
-                navigate('/dashboard'); // Redirect to dashboard
+                // ✅ FIXED: Directly navigate to Student Dashboard
+                // No role checking needed as Admin has a separate login page
+                navigate('/student/dashboard');
             }
         } catch (error) {
-            console.error(error);
+            console.error("Login Error:", error);
         } finally {
             setIsSubmitting(false);
         }
