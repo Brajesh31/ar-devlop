@@ -3,7 +3,7 @@ import { motion, useMotionValue, useTransform, useSpring } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import {
     Trophy, Calendar, Sparkles, ArrowUpRight, Upload,
-    Zap, Activity, ChevronRight, Star, Layers, Command, BellRing
+    Zap, Activity, Layers, Star
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
@@ -55,7 +55,7 @@ const useTilt = () => {
     return { rotateX, rotateY, handleMouseMove, handleMouseLeave };
 };
 
-// --- SKELETON LOADER (Light Theme) ---
+// --- SKELETON LOADER ---
 const DashboardSkeleton = () => (
     <div className="max-w-[1600px] mx-auto space-y-8 p-2">
         <div className="h-[300px] rounded-[2.5rem] bg-white shadow-sm border border-slate-100 w-full animate-pulse" />
@@ -78,18 +78,26 @@ const Dashboard = () => {
     const [upcoming, setUpcoming] = useState<UpcomingActivity[]>([]);
     const [loading, setLoading] = useState(true);
 
-    // Tilt Hook for Hero
     const { rotateX, rotateY, handleMouseMove, handleMouseLeave } = useTilt();
 
     useEffect(() => {
         const fetchData = async () => {
             try {
-                const [statsData, upcomingData] = await Promise.all([
+                // ✅ FIXED: Correctly handling the API Response wrapper
+                const [statsRes, upcomingRes] = await Promise.all([
                     studentService.getStats(),
                     studentService.getUpcoming()
                 ]);
-                setStats(statsData);
-                setUpcoming(upcomingData);
+
+                // Extract 'data' only if status is success
+                if (statsRes.status === 'success' && statsRes.data) {
+                    setStats(statsRes.data);
+                }
+
+                if (upcomingRes.status === 'success' && upcomingRes.data) {
+                    setUpcoming(upcomingRes.data);
+                }
+
             } catch (error) {
                 console.error("Dashboard error", error);
             } finally {
@@ -109,7 +117,7 @@ const Dashboard = () => {
             className="max-w-[1600px] mx-auto space-y-8"
         >
 
-            {/* === 1. HERO SECTION (Light & Clean) === */}
+            {/* === 1. HERO SECTION === */}
             <motion.div
                 style={{ rotateX, rotateY, transformStyle: "preserve-3d" }}
                 onMouseMove={handleMouseMove}
@@ -117,7 +125,7 @@ const Dashboard = () => {
                 variants={itemVariants}
                 className="relative overflow-hidden rounded-[2.5rem] bg-white border border-slate-100 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.05)] min-h-[320px] group"
             >
-                {/* Soft Aurora Background (Light Mode) */}
+                {/* Soft Aurora Background */}
                 <div className="absolute inset-0 opacity-40 pointer-events-none">
                     <div className="absolute -top-[50%] -right-[10%] w-[800px] h-[800px] bg-gradient-to-br from-orange-100/80 via-yellow-100/50 to-transparent rounded-full blur-[100px] animate-pulse-slow" />
                     <div className="absolute -bottom-[50%] -left-[10%] w-[800px] h-[800px] bg-gradient-to-tr from-green-100/80 via-emerald-50/50 to-transparent rounded-full blur-[100px] animate-pulse-slow delay-1000" />
@@ -164,7 +172,7 @@ const Dashboard = () => {
                 </div>
             </motion.div>
 
-            {/* === 2. STATS CARDS (Floating & Clean) === */}
+            {/* === 2. STATS CARDS === */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
                 {[
                     {
@@ -227,7 +235,7 @@ const Dashboard = () => {
                 ))}
             </div>
 
-            {/* === 3. BENTO GRID (White, Shadowed, Detailed) === */}
+            {/* === 3. BENTO GRID === */}
             <div className="grid grid-cols-12 gap-6 h-auto lg:h-[500px]">
 
                 {/* LARGE TILE: UPLOAD */}
@@ -312,7 +320,7 @@ const Dashboard = () => {
                         {upcoming.length > 0 ? upcoming.map((item) => (
                             <motion.div
                                 key={item.id}
-                                onClick={() => navigate(`/student/events`)} // Navigates to event list
+                                onClick={() => navigate(`/student/events`)}
                                 whileHover={{ x: 4, backgroundColor: "rgba(248, 250, 252, 1)" }}
                                 className="flex gap-4 items-center p-3 rounded-2xl transition-colors cursor-pointer group border border-transparent hover:border-slate-100"
                             >
@@ -344,7 +352,7 @@ const Dashboard = () => {
 
             </div>
 
-            {/* === 4. GAMIFICATION BANNER (Bottom) === */}
+            {/* === 4. GAMIFICATION BANNER === */}
             <motion.div
                 variants={itemVariants}
                 className="relative overflow-hidden rounded-[2rem] bg-gradient-to-r from-slate-900 to-slate-800 p-1 shadow-xl"
