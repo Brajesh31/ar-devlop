@@ -6,7 +6,7 @@ import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { authService } from '@/services/api';
+import { useAuth } from '@/hooks/useAuth'; // ✅ Use the Hook for consistent Toast handling
 import { ArrowLeft, Loader2, Mail, CheckCircle2 } from 'lucide-react';
 
 // Validation Schema
@@ -21,6 +21,7 @@ interface ForgotPasswordFormProps {
 }
 
 export const ForgotPasswordForm = ({ onBackToLogin }: ForgotPasswordFormProps) => {
+    const { forgotPassword } = useAuth(); // ✅ Destructure helper from useAuth
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isSent, setIsSent] = useState(false);
 
@@ -32,22 +33,21 @@ export const ForgotPasswordForm = ({ onBackToLogin }: ForgotPasswordFormProps) =
     const onSubmit = async (data: ForgotFormData) => {
         setIsSubmitting(true);
         try {
-            const result = await authService.forgotPassword(data.email);
-            if (result?.status === 'success') {
+            // ✅ Call forgotPassword from useAuth (handles API + Toasts)
+            const result = await forgotPassword(data.email);
+
+            if (result && result.success) {
                 setIsSent(true);
-            } else {
-                // Optionally handle error here
-                console.error(result?.message);
             }
         } catch (error) {
-            console.error(error);
+            console.error("Forgot Password Error:", error);
         } finally {
             setIsSubmitting(false);
         }
     };
 
     if (isSent) {
-        // SUCCESS STATE
+        // SUCCESS STATE (Check Inbox UI)
         return (
             <motion.div
                 initial={{ scale: 0.9, opacity: 0 }}
