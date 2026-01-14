@@ -1,10 +1,45 @@
 import { useEffect, useState } from 'react';
+import { motion } from 'framer-motion';
 import {
-    Trophy, Calendar, Sparkles, ArrowRight, Upload, Clock, Loader2, Zap
+    Trophy, Calendar, Sparkles, ArrowUpRight, Upload,
+    Zap, Activity, Target, ChevronRight, Star, Layers
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
 import { studentService, StudentStats, UpcomingActivity } from '@/services/api';
+
+// --- ANIMATION VARIANTS ---
+const containerVariants = {
+    hidden: { opacity: 0 },
+    visible: {
+        opacity: 1,
+        transition: { staggerChildren: 0.1 }
+    }
+};
+
+const itemVariants = {
+    hidden: { y: 20, opacity: 0 },
+    visible: { y: 0, opacity: 1, transition: { type: "spring", stiffness: 100 } }
+};
+
+// --- SKELETON LOADER COMPONENT ---
+const DashboardSkeleton = () => (
+    <div className="space-y-6 animate-pulse">
+        {/* Banner Skeleton */}
+        <div className="h-64 rounded-[2.5rem] bg-slate-200/50 w-full" />
+        {/* Stats Grid Skeleton */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="h-32 rounded-[2rem] bg-slate-200/50" />
+            ))}
+        </div>
+        {/* Bento Grid Skeleton */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-96">
+            <div className="lg:col-span-2 rounded-[2.5rem] bg-slate-200/50" />
+            <div className="rounded-[2.5rem] bg-slate-200/50" />
+        </div>
+    </div>
+);
 
 const Dashboard = () => {
     const { user } = useAuth();
@@ -15,6 +50,8 @@ const Dashboard = () => {
     useEffect(() => {
         const fetchData = async () => {
             try {
+                // Add artificial delay to show off the premium skeleton effect
+                // await new Promise(resolve => setTimeout(resolve, 1500));
                 const [statsData, upcomingData] = await Promise.all([
                     studentService.getStats(),
                     studentService.getUpcoming()
@@ -30,135 +67,214 @@ const Dashboard = () => {
         fetchData();
     }, []);
 
-    if (loading) {
-        return <div className="h-[60vh] flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-[#FF6B35]" /></div>;
-    }
-
-    // --- WIDGET COMPONENT ---
-    const StatCard = ({ icon: Icon, label, value, colorClass, bgClass, trend }: any) => (
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-all duration-300 group">
-            <div className="flex justify-between items-start mb-4">
-                <div className={`p-3 rounded-xl ${bgClass} ${colorClass} group-hover:scale-110 transition-transform`}>
-                    <Icon className="w-6 h-6" />
-                </div>
-                {value > 0 && <span className="text-[10px] font-bold px-2 py-1 rounded-full bg-green-100 text-green-700 uppercase tracking-wide">Active</span>}
-            </div>
-            <h3 className="text-3xl font-bold text-slate-800 mb-1">{value}</h3>
-            <p className="text-sm text-slate-500 font-medium">{label}</p>
-        </div>
-    );
+    if (loading) return <DashboardSkeleton />;
 
     return (
-        <div className="space-y-8 max-w-7xl mx-auto">
+        <motion.div
+            variants={containerVariants}
+            initial="hidden"
+            animate="visible"
+            className="max-w-[1600px] mx-auto space-y-6"
+        >
 
-            {/* 1. Welcome Header (Orange Gradient Brand) */}
-            <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-[#FF6B35] to-[#FF8F50] p-8 md:p-10 text-white shadow-xl shadow-orange-200">
-                <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
-                    <div>
-                        <h1 className="text-3xl md:text-4xl font-bold mb-2">Hello, {user?.name?.split(' ')[0]}! 👋</h1>
-                        <p className="text-orange-50 text-lg max-w-xl">
-                            Welcome to your student hub. You have <span className="font-bold text-white">{stats?.eventsRegistered} active events</span> and pending tasks.
+            {/* === 1. HERO BENTO CARD === */}
+            <motion.div
+                variants={itemVariants}
+                className="relative overflow-hidden rounded-[2.5rem] bg-slate-900 text-white shadow-2xl shadow-slate-900/20 group"
+            >
+                {/* Dynamic Background Mesh */}
+                <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 mix-blend-soft-light" />
+                <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-[#FF6B35] rounded-full blur-[120px] opacity-20 group-hover:opacity-30 transition-opacity duration-1000 translate-x-1/3 -translate-y-1/3" />
+                <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-green-500 rounded-full blur-[100px] opacity-10 group-hover:opacity-20 transition-opacity duration-1000 -translate-x-1/3 translate-y-1/3" />
+
+                <div className="relative z-10 p-8 md:p-12 flex flex-col md:flex-row justify-between items-start md:items-center gap-8">
+                    <div className="space-y-4 max-w-2xl">
+                        <motion.div
+                            initial={{ x: -20, opacity: 0 }}
+                            animate={{ x: 0, opacity: 1 }}
+                            transition={{ delay: 0.2 }}
+                            className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 border border-white/10 backdrop-blur-md text-xs font-medium text-orange-200"
+                        >
+                            <Sparkles size={12} className="text-yellow-400" />
+                            <span>Premium Student Account</span>
+                        </motion.div>
+
+                        <h1 className="text-4xl md:text-6xl font-bold leading-tight tracking-tight">
+                            Ready to <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#FF6B35] to-yellow-400">Innovate?</span>
+                        </h1>
+                        <p className="text-lg text-slate-300">
+                            Welcome back, <span className="font-semibold text-white">{user?.name}</span>.
+                            You have <span className="text-white font-bold underline decoration-[#FF6B35] underline-offset-4">{stats?.eventsRegistered} active missions</span> waiting for you.
                         </p>
                     </div>
-                    <div className="flex gap-3">
-                        <Button className="bg-white text-orange-600 hover:bg-orange-50 border-0 font-bold shadow-lg">
-                            View Calendar
+
+                    <div className="flex flex-col sm:flex-row gap-4">
+                        <Button className="h-14 px-8 rounded-2xl bg-white text-slate-900 font-bold text-base hover:bg-slate-100 hover:scale-105 transition-all shadow-lg shadow-white/10">
+                            Explore Hackathons
+                        </Button>
+                        <Button variant="outline" className="h-14 px-8 rounded-2xl border-white/20 bg-white/5 text-white backdrop-blur-md hover:bg-white/10 transition-all font-semibold">
+                            View Profile
                         </Button>
                     </div>
                 </div>
-                {/* Decorative Circle */}
-                <div className="absolute -right-10 -top-20 w-64 h-64 bg-white/10 rounded-full blur-3xl pointer-events-none"></div>
-            </div>
+            </motion.div>
 
-            {/* 2. Stats Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <StatCard
-                    icon={Calendar}
-                    label="Events Registered"
-                    value={stats?.eventsRegistered || 0}
-                    bgClass="bg-blue-50" colorClass="text-blue-600"
-                />
-                <StatCard
-                    icon={Trophy}
-                    label="Hackathons"
-                    value={stats?.hackathonsParticipated || 0}
-                    bgClass="bg-purple-50" colorClass="text-purple-600"
-                />
-                <StatCard
-                    icon={Sparkles}
-                    label="Lenses Submitted"
-                    value={stats?.lensesSubmitted || 0}
-                    bgClass="bg-orange-50" colorClass="text-[#FF6B35]"
-                />
-                <StatCard
-                    icon={Zap}
-                    label="XP Points"
-                    value={1250}
-                    bgClass="bg-green-50" colorClass="text-green-600"
-                />
-            </div>
-
-            {/* 3. Main Content Area */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-
-                {/* Left: Quick Actions */}
-                <div className="lg:col-span-2 space-y-6">
-                    <h3 className="text-xl font-bold text-slate-800">Quick Actions</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                        {/* Action 1 (Showcase) */}
-                        <div className="group cursor-pointer bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-xl hover:border-orange-200 transition-all duration-300">
-                            <div className="flex justify-between items-start mb-6">
-                                <div className="p-3 rounded-full bg-orange-50 text-[#FF6B35] group-hover:scale-110 transition-transform"><Upload className="w-6 h-6" /></div>
-                                <ArrowRight className="w-5 h-5 text-slate-300 group-hover:text-[#FF6B35] group-hover:translate-x-1 transition-all" />
+            {/* === 2. STATS ROW (Glass Cards) === */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                {[
+                    { label: 'Events Registered', value: stats?.eventsRegistered || 0, icon: Calendar, color: 'text-blue-500', bg: 'bg-blue-500/10' },
+                    { label: 'Hackathons', value: stats?.hackathonsParticipated || 0, icon: Trophy, color: 'text-purple-500', bg: 'bg-purple-500/10' },
+                    { label: 'Lenses Live', value: stats?.lensesSubmitted || 0, icon: Sparkles, color: 'text-[#FF6B35]', bg: 'bg-orange-500/10' },
+                    { label: 'Skill Level', value: 'Pro', icon: Zap, color: 'text-green-500', bg: 'bg-green-500/10' },
+                ].map((stat, idx) => (
+                    <motion.div
+                        key={idx}
+                        variants={itemVariants}
+                        whileHover={{ y: -5 }}
+                        className="group relative p-6 rounded-[2rem] bg-white/60 backdrop-blur-xl border border-white/40 shadow-xl shadow-slate-200/40 hover:shadow-2xl transition-all duration-300"
+                    >
+                        <div className="flex justify-between items-start">
+                            <div>
+                                <p className="text-sm font-medium text-slate-500 mb-1">{stat.label}</p>
+                                <h3 className="text-4xl font-bold text-slate-800 tracking-tight">{stat.value}</h3>
                             </div>
-                            <h4 className="text-lg font-bold text-slate-800">Submit Project</h4>
-                            <p className="text-sm text-slate-500 mt-2">Upload your hackathon submission or project demo.</p>
+                            <div className={`p-4 rounded-2xl ${stat.bg} ${stat.color} group-hover:scale-110 transition-transform duration-300`}>
+                                <stat.icon size={24} />
+                            </div>
                         </div>
+                        {/* Animated Bottom Line */}
+                        <div className="absolute bottom-0 left-6 right-6 h-1 bg-slate-100 rounded-full overflow-hidden">
+                            <motion.div
+                                initial={{ width: 0 }}
+                                animate={{ width: '60%' }}
+                                transition={{ duration: 1, delay: 0.5 + (idx * 0.1) }}
+                                className={`h-full ${stat.color.replace('text-', 'bg-')}`}
+                            />
+                        </div>
+                    </motion.div>
+                ))}
+            </div>
 
-                        {/* Action 2 (Lens) */}
-                        <div className="group cursor-pointer bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-xl hover:border-green-200 transition-all duration-300">
-                            <div className="flex justify-between items-start mb-6">
-                                <div className="p-3 rounded-full bg-green-50 text-green-600 group-hover:scale-110 transition-transform"><Sparkles className="w-6 h-6" /></div>
-                                <ArrowRight className="w-5 h-5 text-slate-300 group-hover:text-green-600 group-hover:translate-x-1 transition-all" />
+            {/* === 3. MAIN BENTO GRID === */}
+            <div className="grid grid-cols-12 gap-6 h-auto lg:h-[500px]">
+
+                {/* LARGE TILE: Showcase Upload */}
+                <motion.div
+                    variants={itemVariants}
+                    className="col-span-12 lg:col-span-5 relative group cursor-pointer overflow-hidden rounded-[2.5rem] bg-gradient-to-br from-orange-50 to-white border border-orange-100 shadow-lg hover:shadow-orange-200/50 transition-all duration-500"
+                >
+                    <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-opacity transform group-hover:scale-110 duration-700">
+                        <Upload size={200} className="text-[#FF6B35]" />
+                    </div>
+                    <div className="h-full flex flex-col justify-between p-10 relative z-10">
+                        <div className="space-y-4">
+                            <div className="w-14 h-14 rounded-2xl bg-[#FF6B35] flex items-center justify-center text-white shadow-lg shadow-orange-500/30 group-hover:rotate-12 transition-transform duration-300">
+                                <Layers size={28} />
                             </div>
-                            <h4 className="text-lg font-bold text-slate-800">Submit AR Lens</h4>
-                            <p className="text-sm text-slate-500 mt-2">Submit your Snap AR Lens for verification.</p>
+                            <h3 className="text-3xl font-bold text-slate-900">Submit Project</h3>
+                            <p className="text-slate-500 max-w-xs">Ready to show the world? Upload your hackathon demo or capstone project.</p>
+                        </div>
+                        <div className="flex items-center gap-2 text-[#FF6B35] font-bold group-hover:translate-x-2 transition-transform">
+                            <span>Start Upload</span>
+                            <ArrowUpRight size={20} />
                         </div>
                     </div>
-                </div>
+                </motion.div>
 
-                {/* Right: Upcoming List */}
-                <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm flex flex-col h-full">
-                    <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
-                        <Clock className="w-5 h-5 text-[#FF6B35]" /> Up Next
-                    </h3>
+                {/* MEDIUM TILE: Lens Studio */}
+                <motion.div
+                    variants={itemVariants}
+                    className="col-span-12 md:col-span-6 lg:col-span-3 relative group cursor-pointer overflow-hidden rounded-[2.5rem] bg-gradient-to-br from-green-50 to-white border border-green-100 shadow-lg hover:shadow-green-200/50 transition-all duration-500"
+                >
+                    <div className="h-full flex flex-col justify-between p-8 relative z-10">
+                        <div className="w-12 h-12 rounded-2xl bg-green-500 flex items-center justify-center text-white shadow-lg shadow-green-500/30 group-hover:rotate-12 transition-transform duration-300">
+                            <Sparkles size={24} />
+                        </div>
+                        <div>
+                            <h3 className="text-2xl font-bold text-slate-900 mb-2">Lens Studio</h3>
+                            <p className="text-sm text-slate-500">Submit your AR filters for verification.</p>
+                        </div>
+                        <div className="w-full h-1 bg-green-100 rounded-full overflow-hidden">
+                            <div className="w-3/4 h-full bg-green-500" />
+                        </div>
+                    </div>
+                </motion.div>
 
-                    <div className="space-y-3 flex-1">
-                        {upcoming.length > 0 ? upcoming.map((item) => (
-                            <div key={item.id} className="flex gap-4 items-center p-3 rounded-xl hover:bg-slate-50 transition-colors cursor-pointer group">
-                                <div className="w-12 h-12 rounded-lg bg-slate-100 overflow-hidden flex-shrink-0 border border-slate-200">
-                                    {item.image ? (
-                                        <img src={item.image} alt={item.title} className="w-full h-full object-cover" />
-                                    ) : (
-                                        <div className="w-full h-full flex items-center justify-center text-slate-400 font-bold text-xs">IMG</div>
-                                    )}
+                {/* LIST TILE: Upcoming Events */}
+                <motion.div
+                    variants={itemVariants}
+                    className="col-span-12 md:col-span-6 lg:col-span-4 rounded-[2.5rem] bg-white border border-slate-100 shadow-lg p-8 flex flex-col overflow-hidden"
+                >
+                    <div className="flex justify-between items-center mb-6">
+                        <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+                            <Activity className="text-slate-400" size={20} />
+                            Up Next
+                        </h3>
+                        <Button variant="ghost" size="sm" className="text-xs text-slate-400 hover:text-[#FF6B35]">View All</Button>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto pr-2 space-y-4 scrollbar-thin scrollbar-thumb-slate-200">
+                        {upcoming.length > 0 ? upcoming.map((item, i) => (
+                            <div key={item.id} className="flex gap-4 items-center p-3 rounded-2xl hover:bg-slate-50 transition-colors group cursor-pointer">
+                                <div className="flex-shrink-0 w-12 h-12 rounded-xl bg-slate-100 border border-slate-200 flex flex-col items-center justify-center text-center">
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase">{new Date(item.date).toLocaleDateString('en-US', { month: 'short' })}</span>
+                                    <span className="text-sm font-bold text-slate-900 leading-none">{new Date(item.date).getDate()}</span>
                                 </div>
-                                <div>
-                                    <h4 className="font-semibold text-slate-800 text-sm line-clamp-1 group-hover:text-[#FF6B35] transition-colors">{item.title}</h4>
-                                    <p className="text-xs text-slate-500 mt-0.5">{new Date(item.date).toLocaleDateString()}</p>
+                                <div className="flex-1 min-w-0">
+                                    <h4 className="font-bold text-slate-800 truncate group-hover:text-[#FF6B35] transition-colors">{item.title}</h4>
+                                    <p className="text-xs text-slate-500 capitalize">{item.type} • Online</p>
                                 </div>
+                                <ChevronRight size={16} className="text-slate-300 group-hover:text-[#FF6B35] group-hover:translate-x-1 transition-transform" />
                             </div>
                         )) : (
-                            <div className="text-center py-10">
-                                <p className="text-slate-400 text-sm">No upcoming events.</p>
-                                <Button variant="link" className="text-[#FF6B35]">Browse Events</Button>
+                            <div className="flex flex-col items-center justify-center h-40 text-center">
+                                <div className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center text-slate-300 mb-3">
+                                    <Calendar size={20} />
+                                </div>
+                                <p className="text-sm text-slate-400">No upcoming events.</p>
                             </div>
                         )}
                     </div>
-                </div>
+                </motion.div>
 
             </div>
-        </div>
+
+            {/* === 4. XP / GAMIFICATION BAR (Bottom) === */}
+            <motion.div
+                variants={itemVariants}
+                className="relative rounded-[2rem] bg-gradient-to-r from-slate-900 to-slate-800 p-1"
+            >
+                <div className="bg-slate-900 rounded-[1.9rem] p-6 flex flex-col md:flex-row items-center gap-6">
+                    <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 rounded-full bg-yellow-400/20 text-yellow-400 flex items-center justify-center shadow-[0_0_20px_rgba(250,204,21,0.3)]">
+                            <Star fill="currentColor" size={20} />
+                        </div>
+                        <div>
+                            <h4 className="text-white font-bold text-lg">Level 5 Scholar</h4>
+                            <p className="text-slate-400 text-sm">1,250 XP earned this month</p>
+                        </div>
+                    </div>
+                    <div className="flex-1 w-full max-w-2xl">
+                        <div className="flex justify-between text-xs font-semibold text-slate-400 mb-2">
+                            <span>Progress to Level 6</span>
+                            <span>75%</span>
+                        </div>
+                        <div className="h-3 bg-slate-800 rounded-full overflow-hidden border border-slate-700">
+                            <motion.div
+                                initial={{ width: 0 }}
+                                animate={{ width: '75%' }}
+                                transition={{ duration: 1.5, ease: "easeOut" }}
+                                className="h-full bg-gradient-to-r from-yellow-400 to-orange-500 rounded-full shadow-[0_0_15px_rgba(255,107,53,0.5)]"
+                            />
+                        </div>
+                    </div>
+                    <Button variant="ghost" className="text-white hover:bg-white/10 hover:text-white">
+                        View Leaderboard
+                    </Button>
+                </div>
+            </motion.div>
+
+        </motion.div>
     );
 };
 

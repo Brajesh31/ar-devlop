@@ -43,9 +43,17 @@ import CreateEvent from "./pages/Admin/Events/CreateEvent";
 import EventAnalytics from "./pages/Admin/Events/EventAnalytics";
 import OverallEventAnalytics from "./pages/Admin/Events/OverallEventAnalytics";
 
-// --- Student Pages (NEW) ---
+// --- Student Pages ---
 import StudentLayout from "./components/layout/StudentLayout";
 import StudentDashboard from "./pages/Student/Dashboard";
+
+// ⚠️ Uncomment these imports once you create the files
+// import MyEvents from "./pages/Student/MyEvents";
+// import MyHackathons from "./pages/Student/MyHackathons";
+// import ShowcaseSubmission from "./pages/Student/Showcase/ShowcaseSubmission";
+// import LensSubmission from "./pages/Student/Lens/LensSubmission";
+// import StudentSurveys from "./pages/Student/StudentSurveys";
+// import StudentProfile from "./pages/Student/StudentProfile";
 
 const queryClient = new QueryClient();
 
@@ -90,39 +98,37 @@ const App = () => (
 
                 {/* === PROTECTED ADMIN DASHBOARD === */}
                 <Route path="/admin" element={<AdminLayout />}>
-                  {/* Redirect /admin to /admin/dashboard */}
                   <Route index element={<Navigate to="/admin/dashboard" replace />} />
-
-                  {/* Dashboard Main */}
                   <Route path="dashboard" element={<Dashboard />} />
-
-                  {/* Events Management Routes */}
                   <Route path="events" element={<EventsList />} />
                   <Route path="events/list" element={<EventsList />} />
-
                   <Route path="events/create" element={<CreateEvent />} />
                   <Route path="events/edit/:id" element={<CreateEvent />} />
-
-                  {/* Analytics */}
                   <Route path="events/analytics" element={<OverallEventAnalytics />} />
                   <Route path="events/:id" element={<EventAnalytics />} />
                 </Route>
 
-                {/* === PROTECTED STUDENT DASHBOARD (NEW) === */}
+                {/* === PROTECTED STUDENT DASHBOARD === */}
                 <Route path="/student" element={<StudentLayout />}>
                   <Route index element={<Navigate to="/student/dashboard" replace />} />
                   <Route path="dashboard" element={<StudentDashboard />} />
 
-                  {/* Placeholders for Future Pages */}
-                  <Route path="events" element={<div className="p-10 text-center text-slate-500">My Events Page (Coming Soon)</div>} />
-                  <Route path="hackathons" element={<div className="p-10 text-center text-slate-500">My Hackathons Page (Coming Soon)</div>} />
-                  <Route path="showcase" element={<div className="p-10 text-center text-slate-500">Showcase Page (Coming Soon)</div>} />
-                  <Route path="lens" element={<div className="p-10 text-center text-slate-500">Lens Studio Page (Coming Soon)</div>} />
-                  <Route path="surveys" element={<div className="p-10 text-center text-slate-500">Surveys Page (Coming Soon)</div>} />
-                  <Route path="profile" element={<div className="p-10 text-center text-slate-500">Profile Page (Coming Soon)</div>} />
+                  {/* ✅ REAL PAGE STRUCTURE (Commented out to prevent crashes)
+                      If these files are missing, the wildcard route below redirects to 404.
+                  */}
+                  {/* <Route path="events" element={<MyEvents />} /> */}
+                  {/* <Route path="hackathons" element={<MyHackathons />} /> */}
+                  {/* <Route path="showcase" element={<ShowcaseSubmission />} /> */}
+                  {/* <Route path="lens" element={<LensSubmission />} /> */}
+                  {/* <Route path="surveys" element={<StudentSurveys />} /> */}
+                  {/* <Route path="profile" element={<StudentProfile />} /> */}
+
+                  {/* Fallback: Any unknown /student/ page goes to 404 */}
+                  <Route path="*" element={<Navigate to="/404" replace />} />
                 </Route>
 
                 {/* === 404 FALLBACK === */}
+                <Route path="/404" element={<NotFound />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
 
