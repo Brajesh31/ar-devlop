@@ -192,7 +192,10 @@ export const adminService = {
     formData.append('file', file);
 
     try {
-      const response = await axios.post(`${API_CONFIG.baseUrl}/admin/media/upload.php`, formData);
+      // Note: We use raw axios here for FormData, but we add credentials
+      const response = await axios.post(`${API_CONFIG.baseUrl}/admin/media/upload.php`, formData, {
+        withCredentials: true // Ensure admin session is sent during upload
+      });
       return response.data;
     } catch (error: any) {
       console.error("Upload Error:", error);
@@ -240,18 +243,24 @@ export const adminService = {
 export const publicService = {
   events: {
     list: async () => {
+      // Read-only: No session needed
       const response = await axios.get(`${API_CONFIG.baseUrl}/events/list.php`);
       return response.data;
     },
 
     getById: async (id: string) => {
+      // Read-only: No session needed
       const response = await axios.get(`${API_CONFIG.baseUrl}/events/get.php?id=${id}`);
       return response.data;
     },
 
     register: async (data: any) => {
-      const response = await axios.post(`${API_CONFIG.baseUrl}/events/register.php`, data);
-      return response.data;
+      // [FIXED] Changed from raw axios.post to apiRequest
+      // This ensures 'withCredentials: true' is sent, so the server sees the logged-in user.
+      return apiRequest('/events/register.php', {
+        method: 'POST',
+        data: data,
+      });
     }
   }
 };

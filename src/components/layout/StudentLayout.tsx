@@ -1,10 +1,10 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { Outlet, useLocation, useNavigate, Link, Navigate } from 'react-router-dom';
-import { motion, AnimatePresence, useScroll, useSpring, useTransform } from 'framer-motion';
+import { motion, AnimatePresence, useScroll, useSpring } from 'framer-motion';
 import {
     LayoutGrid, Calendar, Trophy, Layers,
     FileText, User, LogOut, Menu, BellRing, Sparkles,
-    Search, Command, ChevronRight, Zap
+    Search, Command, Home
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -64,7 +64,7 @@ const StudentLayout = () => {
     }, []);
 
     // 🔒 Security Redirect
-    if (isLoading) return null; // Or a custom premium loader
+    if (isLoading) return null;
     if (!user) return <Navigate to="/auth?mode=login" replace />;
 
     const navItems = [
@@ -81,18 +81,24 @@ const StudentLayout = () => {
     const SidebarContent = () => (
         <div className="flex flex-col h-full relative z-20">
             {/* Brand Header */}
-            <div className="pt-10 pb-8 px-8 flex items-center gap-4">
-                <div className="relative group cursor-pointer">
-                    <div className="absolute inset-0 bg-gradient-to-tr from-orange-500 to-yellow-500 rounded-2xl blur-lg opacity-40 group-hover:opacity-60 transition-opacity duration-500" />
-                    <div className="relative h-12 w-12 bg-gradient-to-tr from-[#FF6B35] to-[#FF9F43] rounded-2xl flex items-center justify-center text-white font-black text-2xl shadow-xl ring-1 ring-white/20">
-                        B
+            <div className="pt-10 pb-6 px-8 flex flex-col gap-3">
+                <Link to="/" className="block relative group cursor-pointer w-fit">
+                    {/* CHANGED: Background to Dark Slate (bg-slate-900) so white text is visible */}
+                    <div className="bg-slate-900 p-3 rounded-2xl shadow-sm border border-slate-800 group-hover:shadow-md transition-all duration-300">
+                        <motion.img
+                            whileHover={{ scale: 1.05 }}
+                            src="/Bharatxr.png"
+                            alt="BharatXR"
+                            className="h-8 w-auto object-contain"
+                        />
                     </div>
-                </div>
-                <div className="flex flex-col">
-                    <h1 className="font-bold text-xl tracking-tight text-slate-900">
-                        Bharat<span className="text-[#FF6B35]">XR</span>
-                    </h1>
-                    <span className="text-[10px] font-bold tracking-[0.2em] text-slate-400 uppercase">Student Hub</span>
+                </Link>
+
+                {/* DARK PILL SHAPE FOR "STUDENT HUB" */}
+                <div className="flex">
+                    <span className="px-3 py-1 rounded-full bg-slate-900 text-white text-[10px] font-bold tracking-[0.2em] uppercase shadow-sm border border-slate-800">
+                        Student Hub
+                    </span>
                 </div>
             </div>
 
@@ -268,11 +274,17 @@ const StudentLayout = () => {
                             <span className="absolute top-2.5 right-3 w-2 h-2 bg-red-500 rounded-full ring-2 ring-white animate-pulse" />
                         </motion.button>
 
-                        {/* Streak / XP Pill */}
-                        <div className="hidden sm:flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-slate-900 to-slate-800 rounded-full text-white shadow-lg shadow-slate-900/10">
-                            <Zap size={14} className="text-yellow-400 fill-yellow-400" />
-                            <span className="text-xs font-bold">1,250 XP</span>
-                        </div>
+                        {/* HOME BUTTON */}
+                        <Link to="/">
+                            <motion.button
+                                whileHover={{ scale: 1.05 }}
+                                whileTap={{ scale: 0.95 }}
+                                className="flex items-center gap-2 px-4 py-2 bg-slate-900 hover:bg-[#FF6B35] text-white rounded-full shadow-lg shadow-slate-900/10 transition-colors"
+                            >
+                                <Home size={16} />
+                                <span className="text-xs font-bold">Home</span>
+                            </motion.button>
+                        </Link>
                     </div>
                 </header>
 
