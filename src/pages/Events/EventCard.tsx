@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Calendar, MapPin, Users } from 'lucide-react';
+import { Calendar, MapPin, Users, CheckCircle2 } from 'lucide-react'; // Added CheckCircle2
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Event } from '@/data/events';
@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 
 interface EventCardProps {
   event: Event;
+  isRegistered?: boolean; // <--- NEW PROP
 }
 
 const statusStyles = {
@@ -22,16 +23,18 @@ const statusLabels = {
   completed: 'Completed',
 };
 
-export const EventCard = ({ event }: EventCardProps) => {
+export const EventCard = ({ event, isRegistered }: EventCardProps) => {
   const formattedDate = format(new Date(event.date), 'MMM d, yyyy');
   const endDateFormatted = event.endDate
       ? format(new Date(event.endDate), 'MMM d, yyyy')
       : null;
 
   return (
-      // UPDATED LINK: Uses slug first, ID as fallback
       <Link to={`/events/${event.slug || event.id}`} className="block group">
-        <Card className="h-full overflow-hidden transition-all duration-300 hover:shadow-lg hover:-translate-y-1 bg-card border-border">
+        <Card className={cn(
+            "h-full overflow-hidden transition-all duration-300 hover:shadow-lg hover:-translate-y-1 bg-card border-border",
+            isRegistered && "ring-2 ring-green-500/20 border-green-500/30" // Subtle highlight if registered
+        )}>
           {/* Banner */}
           <div className="aspect-[16/9] bg-gradient-to-br from-secondary to-muted relative overflow-hidden">
             {event.image ? (
@@ -51,10 +54,18 @@ export const EventCard = ({ event }: EventCardProps) => {
             )}
 
             {/* Status Badge */}
-            <div className="absolute top-3 right-3">
+            <div className="absolute top-3 right-3 flex flex-col gap-2 items-end">
               <Badge className={cn('font-medium', statusStyles[event.status])}>
                 {statusLabels[event.status]}
               </Badge>
+
+              {/* REGISTERED BADGE */}
+              {isRegistered && (
+                  <Badge className="bg-green-500 hover:bg-green-600 text-white gap-1 shadow-md">
+                    <CheckCircle2 size={12} />
+                    Registered
+                  </Badge>
+              )}
             </div>
           </div>
 
@@ -106,10 +117,15 @@ export const EventCard = ({ event }: EventCardProps) => {
             </div>
 
             {/* CTA */}
-            <div className="mt-4 pt-4 border-t border-border">
-            <span className="text-sm font-medium text-accent group-hover:underline">
-              View Details →
-            </span>
+            <div className="mt-4 pt-4 border-t border-border flex justify-between items-center">
+              <span className="text-sm font-medium text-accent group-hover:underline">
+                View Details →
+              </span>
+              {isRegistered && (
+                  <span className="text-xs font-medium text-green-600 flex items-center gap-1">
+                  You are going
+                </span>
+              )}
             </div>
           </CardContent>
         </Card>

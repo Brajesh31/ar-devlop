@@ -3,8 +3,9 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
-import { publicService } from '@/services/api';
+import { publicService, studentService } from '@/services/api'; // Added studentService
 import { Event } from '@/data/events';
+import { useAuth } from '@/hooks/useAuth'; // Added useAuth
 
 import { EventHero } from './EventHero';
 import { QuickInfoRow } from './QuickInfoRow';
@@ -22,33 +23,33 @@ import { RegistrationCard } from './RegistrationCard';
 const EventDetailPage = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { user } = useAuth(); // Get current user
+
   const [event, setEvent] = useState<Event | undefined>(undefined);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRegistered, setIsRegistered] = useState(false); // Track registration status
 
-  // 1. Fetch Event Data
+  // 1. Fetch Event Data & Registration Status
   useEffect(() => {
-    const loadEvent = async () => {
+    const loadData = async () => {
       if (!id) return;
 
       try {
-        const res = await publicService.events.getById(id);
-        if (res.status === 'success' && res.data) {
-          const dbEvent = res.data;
+        // Parallel Fetch: Event Details & User Registrations (if logged in)
+        const [eventRes, myEventsRes] = await Promise.all([
+          publicService.events.getById(id),
+          user ? studentService.getMyEvents() : Promise.resolve({ data: [] })
+        ]);
 
-          // FIX 1: Replaced 'any' with 'unknown' for type safety (ESLint fix)
-          // Also handles cases where input might be null or undefined
+        if (eventRes.status === 'success' && eventRes.data) {
+          const dbEvent = eventRes.data;
+
+          // ... (keep existing mapping logic unchanged) ...
           const parse = (jsonStr: unknown) => {
             if (typeof jsonStr !== 'string') return jsonStr || [];
-            try {
-              return JSON.parse(jsonStr);
-            } catch {
-              return [];
-            }
+            try { return JSON.parse(jsonStr); } catch { return []; }
           };
 
-          // FIX 2: Removed explicit ': Event' type annotation here.
-          // This prevents TS2353 (Excess Property Check) if 'rewards' is missing
-          // from your imported Event interface.
           const mappedEvent = {
             id: dbEvent.event_id,
             title: dbEvent.title,
@@ -67,22 +68,21 @@ const EventDetailPage = () => {
             image: dbEvent.banner_image_url,
             status: 'upcoming',
             tags: parse(dbEvent.tags),
-
-            // Complex JSON Fields
             eligibility: parse(dbEvent.eligibility),
-            rewards: parse(dbEvent.rewards), // This property was causing TS2353
+            rewards: parse(dbEvent.rewards),
             timeline: parse(dbEvent.timeline),
             faqs: parse(dbEvent.faqs),
             terms: dbEvent.terms_conditions,
-
-            // Optional fields
-            highlights: undefined,
-            participantTypes: undefined,
-            steps: undefined
           };
 
-          // Cast to Event to satisfy the state setter
           setEvent(mappedEvent as unknown as Event);
+
+          // CHECK REGISTRATION STATUS
+          if (myEventsRes && Array.isArray(myEventsRes.data)) {
+            const isReg = myEventsRes.data.some((e: any) => String(e.event_id) === String(dbEvent.event_id));
+            setIsRegistered(isReg);
+          }
+
         } else {
           navigate('/events');
         }
@@ -94,8 +94,8 @@ const EventDetailPage = () => {
       }
     };
 
-    loadEvent();
-  }, [id, navigate]);
+    loadData();
+  }, [id, navigate, user]);
 
   if (isLoading) {
     return (
@@ -107,11 +107,10 @@ const EventDetailPage = () => {
 
   if (!event) return null;
 
-  // 2. Logic: Check if Registration is Closed
   const now = new Date();
   const deadline = event.registrationDeadline
       ? new Date(event.registrationDeadline)
-      : new Date(event.date); // Fallback to start date
+      : new Date(event.date);
 
   const isRegistrationClosed = now > deadline;
 
@@ -119,40 +118,47 @@ const EventDetailPage = () => {
       <div className="min-h-screen bg-background">
         <Header />
         <main>
-          {/* Pass isClosed to Hero for the main CTA */}
-          <EventHero event={event} isClosed={isRegistrationClosed} />
+          {/* Pass isRegistered to Hero */}
+          <EventHero
+              event={event}
+              isClosed={isRegistrationClosed}
+              isRegistered={isRegistered}
+          />
           <QuickInfoRow event={event} />
 
           <div className="container-wide py-8">
             <div className="lg:grid lg:grid-cols-3 lg:gap-8">
-              {/* Main Content */}
               <div className="lg:col-span-2">
                 <AboutEvent event={event} />
                 <EventHighlights event={event} />
                 <EligibilitySection event={event} />
                 <ParticipantTypes event={event} />
                 <StepsToParticipate event={event} />
-
-                {/* Ensure RewardsSection can handle the data structure */}
                 <RewardsSection event={event} />
-
                 <EventTimeline event={event} />
                 <EventFAQs event={event} />
                 <TermsSection event={event} />
               </div>
 
-              {/* Sidebar - Registration Card */}
               <div className="lg:col-span-1 mt-8 lg:mt-0">
                 <div className="lg:sticky lg:top-28">
-                  <RegistrationCard event={event} isClosed={isRegistrationClosed} />
+                  {/* Pass isRegistered to RegistrationCard */}
+                  <RegistrationCard
+                      event={event}
+                      isClosed={isRegistrationClosed}
+                      isRegistered={isRegistered} // <--- Pass the prop here
+                  />
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Mobile Registration Card */}
           <div className="lg:hidden container-wide pb-8">
-            <RegistrationCard event={event} isClosed={isRegistrationClosed} />
+            <RegistrationCard
+                event={event}
+                isClosed={isRegistrationClosed}
+                isRegistered={isRegistered} // <--- And here
+            />
           </div>
         </main>
         <Footer />

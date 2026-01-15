@@ -1,6 +1,9 @@
+import { useState, useEffect } from 'react'; // Added hooks
 import { motion } from 'framer-motion';
 import { Event } from '@/data/events';
 import { EventCard } from './EventCard';
+import { useAuth } from '@/hooks/useAuth'; // Import Auth hook
+import { studentService } from '@/services/api'; // Import API service
 
 interface EventsGridProps {
   events: Event[];
@@ -27,8 +30,29 @@ const itemVariants = {
 };
 
 export const EventsGrid = ({ events }: EventsGridProps) => {
-  // Create a copy and sort by date DESCENDING (Furthest date first)
-  // Example: Nov 2025 (First) -> Feb 2025 (Second)
+  const { user } = useAuth();
+  const [registeredIds, setRegisteredIds] = useState<Set<string>>(new Set());
+
+  // 1. Fetch Registered Events IDs
+  useEffect(() => {
+    const fetchRegistrations = async () => {
+      if (!user) return;
+      try {
+        const res = await studentService.getMyEvents();
+        if (res && Array.isArray(res.data)) { // Check if data exists
+          // Create a Set of event IDs for O(1) lookup
+          const ids = new Set(res.data.map((e: any) => String(e.event_id)));
+          setRegisteredIds(ids);
+        }
+      } catch (error) {
+        console.error("Failed to fetch registrations", error);
+      }
+    };
+
+    fetchRegistrations();
+  }, [user]);
+
+  // Create a copy and sort by date DESCENDING
   const sortedEvents = [...events].sort((a, b) => {
     return new Date(b.date).getTime() - new Date(a.date).getTime();
   });
@@ -46,7 +70,10 @@ export const EventsGrid = ({ events }: EventsGridProps) => {
                   key={event.id}
                   variants={itemVariants}
               >
-                <EventCard event={event} />
+                <EventCard
+                    event={event}
+                    isRegistered={registeredIds.has(String(event.id))} // Pass prop
+                />
               </motion.div>
           ))}
         </motion.div>
