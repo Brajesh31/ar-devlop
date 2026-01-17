@@ -11,7 +11,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') exit(0);
 
 // 2. CONFIGURATION
 // Relative path to api/config/db.php from api/lens/
-require_once '../../config/db.php';
+require_once '../config/db.php';
 
 // 3. INPUT PARSING
 $input = json_decode(file_get_contents('php://input'), true);

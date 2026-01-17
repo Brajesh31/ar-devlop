@@ -10,7 +10,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') exit(0);
 
 // 2. CONFIGURATION
 // Relative path to api/config/db.php from api/showcase/
-require_once '../../config/db.php';
+require_once '../config/db.php';
 
 // CONSTANTS
 $MAX_SIZE_BYTES = 3 * 1024 * 1024; // 3 MB (Increased for better UX, adjust as needed)
