@@ -3,7 +3,7 @@
 
 // 1. CONFIGURATION
 // Relative path to api/config/db.php from api/cron/
-require_once '../../config/db.php';
+require_once '../config/db.php';
 
 header('Content-Type: text/plain');
 ini_set('display_errors', 1);
