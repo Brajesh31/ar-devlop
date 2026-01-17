@@ -15,23 +15,37 @@ if (!isset($_FILES['file'])) {
 
 try {
     $file = $_FILES['file'];
-    $uploadDir = $_SERVER['DOCUMENT_ROOT'] . '/uploads/events/';
+
+    // 1. Check Upload Type (Defaults to 'events' if not specified)
+    $type = $_POST['type'] ?? 'events';
+
+    // 2. Set Directory & Prefix based on Type
+    if ($type === 'hackathon') {
+        $folderName = 'hackathons';
+        $prefix = 'hack_';
+    } else {
+        $folderName = 'events';
+        $prefix = 'evt_';
+    }
+
+    $uploadDir = $_SERVER['DOCUMENT_ROOT'] . '/uploads/' . $folderName . '/';
 
     // Safety Checks
     if (!is_dir($uploadDir)) mkdir($uploadDir, 0777, true);
+
     $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
     if (!in_array($ext, ['jpg', 'jpeg', 'png', 'webp'])) {
         throw new Exception("Only JPG, PNG, WEBP allowed");
     }
 
     // Generate Clean Filename
-    $filename = 'evt_' . time() . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
+    $filename = $prefix . time() . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
     $targetPath = $uploadDir . $filename;
 
     if (move_uploaded_file($file['tmp_name'], $targetPath)) {
         // Construct Public URL
         $protocol = isset($_SERVER['HTTPS']) ? 'https://' : 'http://';
-        $url = $protocol . $_SERVER['HTTP_HOST'] . '/uploads/events/' . $filename;
+        $url = $protocol . $_SERVER['HTTP_HOST'] . '/uploads/' . $folderName . '/' . $filename;
 
         echo json_encode([
             "status" => "success",
