@@ -22,7 +22,10 @@ try {
     $email = $input['email'] ?? '';
     $college = $input['college_name'] ?? '';
     $lensLink = $input['lens_link'] ?? '';
+
+    // Apply Defaults (Matching your Database Schema)
     $gender = $input['gender'] ?? 'Not Specified';
+    $category = $input['category'] ?? 'Lens'; // Default to 'Lens' if empty
 
     if (empty($name) || empty($email) || empty($college) || empty($lensLink)) {
         throw new Exception("Missing required fields.");
@@ -34,10 +37,10 @@ try {
     }
 
     // 4. INSERT TO INBOX
-    // We store raw data. The Cron Job will verify the user later.
+    // Explicitly inserting 'category' to match the new table structure
     $sql = "INSERT INTO inbox_lens
-            (raw_name, raw_email, raw_college, gender, lens_link, submission_ip, is_processed)
-            VALUES (?, ?, ?, ?, ?, ?, 0)";
+            (raw_name, raw_email, raw_college, gender, lens_link, category, submission_ip, is_processed)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 0)";
 
     $stmt = $conn->prepare($sql);
 
@@ -49,6 +52,7 @@ try {
         $college,
         $gender,
         $lensLink,
+        $category,
         $ip
     ]);
 

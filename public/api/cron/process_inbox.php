@@ -1,124 +1,104 @@
 <?php
 // public/api/cron/process_inbox.php
 
-// SECURITY: In production, uncomment the line below and use a secret key in your cron URL
-// if ($_GET['key'] !== 'YOUR_SECRET_CRON_KEY') exit('Access Denied');
-
-// ✅ FIX 1: Correct path to db.php (Changed from ../../config/db.php)
-require_once '../config/db.php';
+// 1. CONFIGURATION
+require_once '../../config/db.php';
 
 header('Content-Type: text/plain');
 ini_set('display_errors', 1);
-set_time_limit(300); // Allow script to run for 5 minutes
+set_time_limit(300); // Allow 5 minutes execution time
 
-$processedLens = 0;
-$processedShowcase = 0;
+$movedVideos = 0;
+$movedLenses = 0;
 
 try {
-    // We use a transaction to ensure no data is lost during the move
     $conn->beginTransaction();
 
     // =================================================================
-    // 1. PROCESS LENS INBOX (Batch of 50)
+    // 1. MOVE VIDEOS: Inbox -> Master Showcase
     // =================================================================
-    // This remains active to auto-process lenses (since they are just links)
-    $stmtLens = $conn->query("SELECT * FROM inbox_lens WHERE is_processed = 0 LIMIT 50");
-    $lensItems = $stmtLens->fetchAll(PDO::FETCH_ASSOC);
+    // Select batch of 50 to prevent timeout
+    $stmtVid = $conn->query("SELECT * FROM inbox_showcase LIMIT 50");
+    $videos = $stmtVid->fetchAll(PDO::FETCH_ASSOC);
 
-    if ($lensItems) {
-        $insLens = $conn->prepare("INSERT INTO master_lens
-            (account_status, full_name, email, college_name, gender, lens_link, submitted_at)
-            VALUES ('guest', ?, ?, ?, ?, ?, ?)");
+    if ($videos) {
+        // Prepare Insert into Master (Default status: pending)
+        $insMaster = $conn->prepare("INSERT INTO master_showcase
+            (student_name, email, college_name, gender, project_title, project_description, category, tech_stack, video_path, lens_link, status, received_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)");
 
-        $markLens = $conn->prepare("UPDATE inbox_lens SET is_processed = 1 WHERE inbox_id = ?");
+        // Prepare Delete from Inbox
+        $delInbox = $conn->prepare("DELETE FROM inbox_showcase WHERE inbox_id = ?");
 
-        foreach ($lensItems as $row) {
-            $insLens->execute([
+        foreach ($videos as $row) {
+            // 1. Insert into Master List
+            $insMaster->execute([
+                $row['raw_name'],
+                $row['raw_email'],
+                $row['raw_college'],
+                $row['gender'],
+                $row['project_title'],
+                $row['project_description'],
+                $row['category'],
+                $row['tech_stack'],
+                $row['video_path'],
+                $row['lens_link'],
+                $row['received_at']
+            ]);
+
+            // 2. Delete from Inbox (Keep it clean!)
+            $delInbox->execute([$row['inbox_id']]);
+            $movedVideos++;
+        }
+    }
+
+    // =================================================================
+    // 2. MOVE LENSES: Inbox -> Master Lens
+    // =================================================================
+    $stmtLens = $conn->query("SELECT * FROM inbox_lens LIMIT 50");
+    $lenses = $stmtLens->fetchAll(PDO::FETCH_ASSOC);
+
+    if ($lenses) {
+        $insMasterLens = $conn->prepare("INSERT INTO master_lens
+            (student_name, email, college_name, gender, lens_link, category, status, received_at)
+            VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)");
+
+        $delInboxLens = $conn->prepare("DELETE FROM inbox_lens WHERE inbox_id = ?");
+
+        foreach ($lenses as $row) {
+            $insMasterLens->execute([
                 $row['raw_name'],
                 $row['raw_email'],
                 $row['raw_college'],
                 $row['gender'],
                 $row['lens_link'],
+                $row['category'],
                 $row['received_at']
             ]);
-            $markLens->execute([$row['inbox_id']]);
-            $processedLens++;
+            $delInboxLens->execute([$row['inbox_id']]);
+            $movedLenses++;
         }
     }
 
     // =================================================================
-    // 2. PROCESS SHOWCASE INBOX (DISABLED FOR MANUAL ADMIN APPROVAL)
+    // 3. MAGIC SYNC (Link Registered Users)
     // =================================================================
-    // ✅ FIX 2: Commented out so videos stay in Inbox for you to approve manually.
-    /*
-    $stmtVid = $conn->query("SELECT * FROM inbox_showcase WHERE is_processed = 0 LIMIT 50");
-    $vidItems = $stmtVid->fetchAll(PDO::FETCH_ASSOC);
+    // Now that data is in the Master tables, we link it to real users.
 
-    if ($vidItems) {
-        $insVid = $conn->prepare("INSERT INTO master_showcase
-            (account_status, full_name, email, college_name, project_title, video_url, lens_link, submitted_at)
-            VALUES ('guest', ?, ?, ?, ?, ?, ?, ?)");
+    // Sync Showcase
+    $conn->exec("UPDATE master_showcase m
+                 INNER JOIN users u ON m.email = u.email
+                 SET m.user_id = u.user_id
+                 WHERE m.user_id IS NULL");
 
-        $markVid = $conn->prepare("UPDATE inbox_showcase SET is_processed = 1 WHERE inbox_id = ?");
-
-        foreach ($vidItems as $row) {
-            $insVid->execute([
-                $row['raw_name'],
-                $row['raw_email'],
-                $row['raw_college'],
-                $row['project_title'],
-                $row['video_path'],
-                $row['lens_link'],
-                $row['received_at']
-            ]);
-            $markVid->execute([$row['inbox_id']]);
-            $processedShowcase++;
-        }
-    }
-    */
-
-    // =================================================================
-    // 3. THE "MAGIC" SYNC: Guest -> Verified
-    // =================================================================
-    // This looks for any 'guest' submission where the email matches a registered user
-    // and updates the user_id and status.
-
-    // A. Sync Lens Table
-    $sqlSyncLens = "UPDATE master_lens m
-                    INNER JOIN users u ON m.email = u.email
-                    SET m.user_id = u.user_id, m.account_status = 'verified'
-                    WHERE m.account_status = 'guest'";
-    $conn->exec($sqlSyncLens);
-
-    // B. Sync Showcase Table
-    $sqlSyncShowcase = "UPDATE master_showcase m
-                        INNER JOIN users u ON m.email = u.email
-                        SET m.user_id = u.user_id, m.account_status = 'verified'
-                        WHERE m.account_status = 'guest'";
-    $conn->exec($sqlSyncShowcase);
-
-    // =================================================================
-    // 4. INTELLIGENT COLLEGE MAPPING (For Verified Users Only)
-    // =================================================================
-    // If we have a user_id, we know their type (Undergrad vs School).
-    // We can now check if their typed 'college_name' exists in the Directory.
-    // If not, we create it.
-
-    // A. Link Undergraduate Colleges
-    $sqlLinkColleges = "UPDATE master_showcase m
-                        JOIN directory_colleges_ug d ON m.college_name = d.college_name
-                        SET m.college_id = d.college_id
-                        WHERE m.college_id IS NULL AND m.account_status = 'verified'";
-    $conn->exec($sqlLinkColleges);
-
-    $sqlLinkLens = "UPDATE master_lens m
-                    JOIN directory_colleges_ug d ON m.college_name = d.college_name
-                    SET m.college_id = d.college_id
-                    WHERE m.college_id IS NULL AND m.account_status = 'verified'";
-    $conn->exec($sqlLinkLens);
+    // Sync Lenses
+    $conn->exec("UPDATE master_lens m
+                 INNER JOIN users u ON m.email = u.email
+                 SET m.user_id = u.user_id
+                 WHERE m.user_id IS NULL");
 
     $conn->commit();
-    echo "SUCCESS: Processed $processedLens Lens items. Showcase videos skipped (awaiting manual approval).";
+    echo "SUCCESS: Moved $movedVideos Videos and $movedLenses Lenses to Master Lists. Inbox Cleared.";
 
 } catch (Exception $e) {
     if ($conn->inTransaction()) $conn->rollBack();
