@@ -4,7 +4,8 @@
 // SECURITY: In production, uncomment the line below and use a secret key in your cron URL
 // if ($_GET['key'] !== 'YOUR_SECRET_CRON_KEY') exit('Access Denied');
 
-require_once '../../config/db.php';
+// ✅ FIX 1: Correct path to db.php (Changed from ../../config/db.php)
+require_once '../config/db.php';
 
 header('Content-Type: text/plain');
 ini_set('display_errors', 1);
@@ -20,6 +21,7 @@ try {
     // =================================================================
     // 1. PROCESS LENS INBOX (Batch of 50)
     // =================================================================
+    // This remains active to auto-process lenses (since they are just links)
     $stmtLens = $conn->query("SELECT * FROM inbox_lens WHERE is_processed = 0 LIMIT 50");
     $lensItems = $stmtLens->fetchAll(PDO::FETCH_ASSOC);
 
@@ -45,8 +47,10 @@ try {
     }
 
     // =================================================================
-    // 2. PROCESS SHOWCASE INBOX (Batch of 50)
+    // 2. PROCESS SHOWCASE INBOX (DISABLED FOR MANUAL ADMIN APPROVAL)
     // =================================================================
+    // ✅ FIX 2: Commented out so videos stay in Inbox for you to approve manually.
+    /*
     $stmtVid = $conn->query("SELECT * FROM inbox_showcase WHERE is_processed = 0 LIMIT 50");
     $vidItems = $stmtVid->fetchAll(PDO::FETCH_ASSOC);
 
@@ -71,6 +75,7 @@ try {
             $processedShowcase++;
         }
     }
+    */
 
     // =================================================================
     // 3. THE "MAGIC" SYNC: Guest -> Verified
@@ -99,9 +104,6 @@ try {
     // We can now check if their typed 'college_name' exists in the Directory.
     // If not, we create it.
 
-    // NOTE: This logic is complex. For speed, we will do a simple update
-    // to link existing colleges first.
-
     // A. Link Undergraduate Colleges
     $sqlLinkColleges = "UPDATE master_showcase m
                         JOIN directory_colleges_ug d ON m.college_name = d.college_name
@@ -115,10 +117,8 @@ try {
                     WHERE m.college_id IS NULL AND m.account_status = 'verified'";
     $conn->exec($sqlLinkLens);
 
-    // (You can add similar blocks for directory_schools or directory_colleges_pg if needed)
-
     $conn->commit();
-    echo "SUCCESS: Processed $processedLens Lens items, $processedShowcase Showcase items.";
+    echo "SUCCESS: Processed $processedLens Lens items. Showcase videos skipped (awaiting manual approval).";
 
 } catch (Exception $e) {
     if ($conn->inTransaction()) $conn->rollBack();
