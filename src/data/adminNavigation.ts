@@ -1,3 +1,5 @@
+// src/data/adminNavigation.ts
+
 import {
     LayoutDashboard,
     BarChart2,

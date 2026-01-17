@@ -42,8 +42,16 @@ import EventsList from "./pages/Admin/Events/EventsList";
 import CreateEvent from "./pages/Admin/Events/CreateEvent";
 import EventAnalytics from "./pages/Admin/Events/EventAnalytics";
 import OverallEventAnalytics from "./pages/Admin/Events/OverallEventAnalytics";
+
+// --- Admin Hackathon Pages (NEW) ---
+import HackathonsList from "./pages/Admin/Hackathons/HackathonsList";
+import CreateHackathon from "./pages/Admin/Hackathons/CreateHackathon";
+import HackathonManager from "./pages/Admin/Hackathons/HackathonManager";
+
+// --- Showcase & Lens Pages ---
 import { SubmitProjectPage } from "./pages/Showcase/SubmitProjectPage";
 import { SubmitLensPage } from "./pages/Showcase/SubmitLensPage";
+
 // --- Student Pages ---
 import StudentLayout from "./components/layout/StudentLayout";
 import StudentDashboard from "./pages/Student/Dashboard";
@@ -103,12 +111,22 @@ const App = () => (
                 <Route path="/admin" element={<AdminLayout />}>
                   <Route index element={<Navigate to="/admin/dashboard" replace />} />
                   <Route path="dashboard" element={<Dashboard />} />
+
+                  {/* Events Management */}
                   <Route path="events" element={<EventsList />} />
                   <Route path="events/list" element={<EventsList />} />
                   <Route path="events/create" element={<CreateEvent />} />
                   <Route path="events/edit/:id" element={<CreateEvent />} />
                   <Route path="events/analytics" element={<OverallEventAnalytics />} />
                   <Route path="events/:id" element={<EventAnalytics />} />
+
+                  {/* Hackathons Management (NEW) */}
+                  <Route path="hackathons" element={<HackathonsList />} />
+                  <Route path="hackathons/list" element={<HackathonsList />} />
+                  <Route path="hackathons/create" element={<CreateHackathon />} />
+                  <Route path="hackathons/manage/:id" element={<HackathonManager />} />
+                  {/* Note: Edit route can reuse Create or separate Edit component if needed later */}
+                  <Route path="hackathons/edit/:id" element={<CreateHackathon />} />
                 </Route>
 
                 {/* === PROTECTED STUDENT DASHBOARD === */}
@@ -116,17 +134,11 @@ const App = () => (
                   <Route index element={<Navigate to="/student/dashboard" replace />} />
                   <Route path="dashboard" element={<StudentDashboard />} />
 
-                  {/* ✅ REAL PAGE STRUCTURE (Commented out to prevent crashes)
-                      If these files are missing, the wildcard route below redirects to 404.
-                  */}
+                  {/* ✅ Student Routes */}
                   <Route path="events" element={<MyEvents />} />
                   {/* <Route path="hackathons" element={<MyHackathons />} /> */}
-                  {/* <Route path="showcase" element={<ShowcaseSubmission />} /> */}
-                  {/* <Route path="lens" element={<LensSubmission />} /> */}
-                  {/* <Route path="surveys" element={<StudentSurveys />} /> */}
-                  {/* <Route path="profile" element={<StudentProfile />} /> */}
 
-                  {/* Fallback: Any unknown /student/ page goes to 404 */}
+                  {/* Fallback */}
                   <Route path="*" element={<Navigate to="/404" replace />} />
                 </Route>
 

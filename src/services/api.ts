@@ -1,7 +1,7 @@
 /**
  * API Service Layer
  * Connects frontend components to PHP backend APIs using Axios
- * STATUS: Admin Auth, Admin Events, Public Auth, Student Dashboard (Separate), SHOWCASE & LENS
+ * STATUS: Admin Auth, Admin Events, Admin HACKATHONS, Public Auth, Student Dashboard, SHOWCASE & LENS
  */
 
 import axios, { AxiosRequestConfig } from 'axios';
@@ -26,7 +26,7 @@ export const apiClient = axios.create({
 export interface ApiResponse<T = any> {
   user_id: any;
   redirect: any;
-  status: 'success' | 'error';
+  status: 'success' | 'error' | 'registered' | 'not_registered' | 'queued';
   data?: T;       // Standard data payload
   user?: T;       // specific to login endpoint
   event?: any;    // specific to get_details
@@ -34,6 +34,10 @@ export interface ApiResponse<T = any> {
   message?: string;
   url?: string;   // specific to upload
   count?: number;
+
+  // Hackathon Specific
+  queue_id?: number;
+  slug?: string;
 
   // NEW: Admin List Response specific
   meta?: {
@@ -64,7 +68,7 @@ export interface AuthUser {
   institution?: string;
 }
 
-// Student Dashboard Types (Your Original Structure)
+// Student Dashboard Types
 export interface StudentStats {
   eventsRegistered: number;
   hackathonsParticipated: number;
@@ -202,8 +206,8 @@ export interface DashboardStats {
     events: number;
     hackathons: number;
     growth: number;
-    pending_showcase: number; // Added
-    pending_lens: number;     // Added
+    pending_showcase: number;
+    pending_lens: number;
   };
   activity: Array<{
     user: string;
@@ -215,15 +219,17 @@ export interface DashboardStats {
 }
 
 export const adminService = {
-  // Fetch Dashboard Stats (Updated to include Pending Counts)
+  // Fetch Dashboard Stats
   getStats: async () => {
     return apiRequest<DashboardStats>('/admin/dashboard/stats.php');
   },
 
-  // === IMAGE UPLOAD SERVICE (UNTOUCHED) ===
-  uploadImage: async (file: File) => {
+  // === IMAGE UPLOAD SERVICE ===
+  // Updated to support 'type' for separate Hackathon folder
+  uploadImage: async (file: File, type: 'events' | 'hackathon' = 'events') => {
     const formData = new FormData();
     formData.append('file', file);
+    formData.append('type', type); // 'events' or 'hackathon'
 
     try {
       const response = await axios.post(`${API_CONFIG.baseUrl}/admin/media/upload.php`, formData, {
@@ -268,9 +274,47 @@ export const adminService = {
     },
   },
 
-  // === NEW: SHOWCASE & LENS MANAGEMENT ===
+  // === HACKATHONS MANAGEMENT (NEW) ===
+  hackathons: {
+    list: async () => {
+      return apiRequest<any[]>('/admin/hackathons/list.php');
+    },
+
+    getDetails: async (idOrSlug: string) => {
+      // PHP Script accepts ?id=... or ?slug=...
+      return apiRequest<any>(`/admin/hackathons/get_details.php?id=${idOrSlug}`);
+    },
+
+    create: async (data: any) => {
+      return apiRequest('/admin/hackathons/create.php', {
+        method: 'POST',
+        data: data,
+      });
+    },
+
+    update: async (data: any) => {
+      return apiRequest('/admin/hackathons/update.php', {
+        method: 'POST',
+        data: data,
+      });
+    },
+
+    delete: async (id: string) => {
+      return apiRequest('/admin/hackathons/delete.php', {
+        method: 'POST',
+        data: { id },
+      });
+    },
+
+    getParticipants: async (idOrSlug: string, status?: string) => {
+      let url = `/admin/hackathons/participants.php?id=${idOrSlug}`;
+      if (status) url += `&status=${status}`;
+      return apiRequest<any[]>(url);
+    }
+  },
+
+  // === SHOWCASE & LENS MANAGEMENT (UNTOUCHED) ===
   showcase: {
-    // 1. Fetch List (Verified vs Guest) - Points to our new list_master.php
     getAll: async (type: 'showcase' | 'lens', filters?: {
       status?: string;
       startDate?: string;
@@ -289,7 +333,6 @@ export const adminService = {
       }>(`/admin/showcase/list_master.php?${query.toString()}`);
     },
 
-    // 2. Update Status (Approve/Reject)
     updateStatus: async (
         id: number,
         type: 'showcase' | 'lens',
@@ -301,7 +344,6 @@ export const adminService = {
       });
     },
 
-    // 3. Toggle Feature
     toggleFeatured: async (id: number, type: 'showcase' | 'lens', isFeatured: boolean) => {
       return apiRequest('/admin/showcase/manage.php', {
         method: 'POST',
@@ -313,7 +355,6 @@ export const adminService = {
       });
     },
 
-    // 4. Delete Item
     deleteItem: async (id: number, type: 'showcase' | 'lens') => {
       return apiRequest('/admin/showcase/manage.php', {
         method: 'POST',
@@ -321,7 +362,6 @@ export const adminService = {
       });
     },
 
-    // 5. Get CSV Export URL
     getExportUrl: (type: 'showcase' | 'lens', startDate: string, endDate: string) => {
       return `${API_CONFIG.baseUrl}/admin/showcase/export.php?type=${type}&start_date=${startDate}&end_date=${endDate}`;
     }
@@ -351,7 +391,29 @@ export const publicService = {
     }
   },
 
-  // === NEW: SHOWCASE (VIDEOS) ===
+  // === HACKATHONS (NEW) ===
+  hackathons: {
+    list: async () => {
+      const response = await axios.get(`${API_CONFIG.baseUrl}/hackathons/list.php`);
+      return response.data;
+    },
+    getDetails: async (idOrSlug: string) => {
+      const response = await axios.get(`${API_CONFIG.baseUrl}/hackathons/get.php?slug=${idOrSlug}`);
+      return response.data;
+    },
+    checkStatus: async (userId: string, hackathonId: string) => {
+      const response = await axios.get(`${API_CONFIG.baseUrl}/hackathons/my_status.php?userId=${userId}&hackathonId=${hackathonId}`);
+      return response.data;
+    },
+    register: async (data: { userId: string, hackathonId: string, type: 'solo' | 'create_team' | 'join_team', teamName?: string, teamCode?: string }) => {
+      return apiRequest('/hackathons/register.php', {
+        method: 'POST',
+        data: data
+      });
+    }
+  },
+
+  // === SHOWCASE (VIDEOS) (UNTOUCHED) ===
   showcase: {
     submitVideo: async (formData: FormData) => {
       try {
@@ -372,7 +434,7 @@ export const publicService = {
     }
   },
 
-  // === NEW: LENS (AR LINKS) ===
+  // === LENS (AR LINKS) (UNTOUCHED) ===
   lens: {
     submitLens: async (data: any) => {
       return apiRequest('/lens/submit.php', {
@@ -386,7 +448,7 @@ export const publicService = {
     }
   },
 
-  // === NEW: ANALYTICS ===
+  // === ANALYTICS (UNTOUCHED) ===
   analytics: {
     registerView: async (id: number, type: 'showcase' | 'lens') => {
       axios.post(`${API_CONFIG.baseUrl}/analytics/view.php`, { id, type });
@@ -405,20 +467,23 @@ export const studentService = {
     return apiRequest<any[]>('/student/my_events.php');
   },
 
-  // 2. Get Dashboard Stats (UNTOUCHED - As requested)
+  // 2. [NEW] Get My Hackathons
+  getMyHackathons: async (userId: string) => {
+    return apiRequest<any[]>(`/users/my_hackathons.php?userId=${userId}`);
+  },
+
+  // 3. Get Dashboard Stats (UNTOUCHED)
   getStats: async () => {
     return apiRequest<StudentStats>('/student/dashboard/stats.php');
   },
 
-  // 3. Get Upcoming Activities (UNTOUCHED - As requested)
+  // 4. Get Upcoming Activities (UNTOUCHED)
   getUpcoming: async () => {
     return apiRequest<UpcomingActivity[]>('/student/dashboard/upcoming.php');
   },
 
-  // 4. [NEW] Get My Showcase & Lens Submissions
-  // We use the new backend file to fetch this specific list
+  // 5. Get My Showcase & Lens Submissions (UNTOUCHED)
   getMySubmissions: async () => {
-    // This file returns { submissions: { videos: [], lenses: [] }, ... }
     return apiRequest<{
       submissions: { videos: ShowcaseItem[], lenses: ShowcaseItem[] }
     }>('/student/get_dashboard.php');
