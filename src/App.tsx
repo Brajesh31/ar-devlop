@@ -42,7 +42,8 @@ import EventsList from "./pages/Admin/Events/EventsList";
 import CreateEvent from "./pages/Admin/Events/CreateEvent";
 import EventAnalytics from "./pages/Admin/Events/EventAnalytics";
 import OverallEventAnalytics from "./pages/Admin/Events/OverallEventAnalytics";
-
+import { SubmitProjectPage } from "./pages/Showcase/SubmitProjectPage";
+import { SubmitLensPage } from "./pages/Showcase/SubmitLensPage";
 // --- Student Pages ---
 import StudentLayout from "./components/layout/StudentLayout";
 import StudentDashboard from "./pages/Student/Dashboard";
@@ -82,6 +83,8 @@ const App = () => (
                 <Route path="/auth" element={<AuthPage />} />
                 <Route path="/login" element={<Navigate to="/auth?mode=login" replace />} />
                 <Route path="/signup" element={<Navigate to="/auth?mode=signup" replace />} />
+                <Route path="/showcase/SubmitProjectPage" element={<SubmitProjectPage />} />
+                <Route path="/showcase/SubmitLensPage" element={<SubmitLensPage />} />
 
                 {/* Legal & Support */}
                 <Route path="/privacy" element={<PrivacyPolicy />} />
