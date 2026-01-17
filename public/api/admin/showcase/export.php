@@ -10,7 +10,7 @@ header('Content-Type: text/csv; charset=utf-8');
 require_once '../../config/db.php';
 
 // 3. PARAMETERS
-$type = $_GET['type'] ?? 'lens'; // 'lens' or 'showcase'
+$type = $_GET['type'] ?? 'showcase';
 $startDate = $_GET['start_date'] ?? '2024-01-01';
 $endDate = $_GET['end_date'] ?? date('Y-m-d');
 
@@ -22,46 +22,74 @@ header("Content-Disposition: attachment; filename=\"$filename\"");
 $output = fopen('php://output', 'w');
 
 try {
-    // 5. DEFINE COLUMNS BASED ON TYPE
-    if ($type === 'lens') {
-        // HEADERS
+    // 5. DEFINE HEADERS & QUERY
+    if ($type === 'showcase') {
+        // Headers for Video Projects
         fputcsv($output, [
-            'ID', 'Status', 'Full Name', 'Email', 'College', 'Gender', 'Lens Link', 'Submitted At'
+            'ID', 'Status', 'Is Verified?', 'Student Name', 'Email', 'Phone',
+            'College', 'Gender', 'Project Title', 'Category',
+            'Tech Stack', 'Video Path', 'Lens Link', 'Date'
         ]);
 
-        // QUERY (Combined Verified + Guest)
         $sql = "SELECT
-                    submission_id, account_status, full_name, email, college_name, gender, lens_link, submitted_at
-                FROM master_lens
-                WHERE DATE(submitted_at) BETWEEN ? AND ?
-                ORDER BY submitted_at DESC";
-
-    } else {
-        // SHOWCASE HEADERS
-        fputcsv($output, [
-            'ID', 'Acc Status', 'Admin Status', 'Featured?', 'Full Name', 'Email', 'College', 'Project Title', 'Video URL', 'Submitted At'
-        ]);
-
-        // QUERY
-        $sql = "SELECT
-                    submission_id, account_status, admin_status, is_featured, full_name, email, college_name, project_title, video_url, submitted_at
+                    id, status, user_id, student_name, email, phone,
+                    college_name, gender, project_title, category,
+                    tech_stack, video_path, lens_link, received_at
                 FROM master_showcase
-                WHERE DATE(submitted_at) BETWEEN ? AND ?
-                ORDER BY submitted_at DESC";
+                WHERE DATE(received_at) BETWEEN ? AND ?
+                ORDER BY received_at DESC";
+    } else {
+        // Headers for Lenses
+        fputcsv($output, [
+            'ID', 'Status', 'Is Verified?', 'Student Name', 'Email', 'Phone',
+            'College', 'Gender', 'Lens Link', 'Category', 'Date'
+        ]);
+
+        $sql = "SELECT
+                    id, status, user_id, student_name, email, phone,
+                    college_name, gender, lens_link, category, received_at
+                FROM master_lens
+                WHERE DATE(received_at) BETWEEN ? AND ?
+                ORDER BY received_at DESC";
     }
 
-    // 6. EXECUTE & STREAM
+    // 6. EXECUTE & WRITE
     $stmt = $conn->prepare($sql);
     $stmt->execute([$startDate, $endDate]);
 
     while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-        // Clean up data for CSV (prevent Excel injection or formatting issues)
-        // e.g. Prepend ' to phone numbers if they existed
-        fputcsv($output, $row);
+        // Logic: Convert user_id to "Yes/No" string for CSV
+        $isVerified = !empty($row['user_id']) ? 'Verified' : 'Guest';
+
+        // Remove user_id from the array to match CSV headers order (it was 3rd in query)
+        // We construct the row manually to be safe
+        $csvRow = [];
+        $csvRow[] = $row['id'];
+        $csvRow[] = $row['status'];
+        $csvRow[] = $isVerified; // Calculated column
+        $csvRow[] = $row['student_name'];
+        $csvRow[] = $row['email'];
+        $csvRow[] = $row['phone'];
+        $csvRow[] = $row['college_name'];
+        $csvRow[] = $row['gender'];
+
+        if ($type === 'showcase') {
+            $csvRow[] = $row['project_title'];
+            $csvRow[] = $row['category'];
+            $csvRow[] = $row['tech_stack'];
+            $csvRow[] = $row['video_path'];
+            $csvRow[] = $row['lens_link'];
+        } else {
+            $csvRow[] = $row['lens_link'];
+            $csvRow[] = $row['category'];
+        }
+
+        $csvRow[] = $row['received_at'];
+
+        fputcsv($output, $csvRow);
     }
 
 } catch (Exception $e) {
-    // If error, write it to the CSV file itself so admin sees it
     fputcsv($output, ['ERROR', $e->getMessage()]);
 }
 

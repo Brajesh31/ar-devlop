@@ -9,26 +9,28 @@ header('Content-Type: application/json');
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') exit(0);
 
-require_once '../config/db.php';
+// 2. CONFIGURATION
+// Relative path to api/config/db.php from api/lens/
+require_once '../../config/db.php';
 
-// 2. INPUT PARSING
+// 3. INPUT PARSING
 $input = json_decode(file_get_contents('php://input'), true);
 
-$response = ['status' => 'error', 'message' => 'Unknown error'];
-
 try {
-    // 3. VALIDATION
+    // 4. VALIDATION
     $name = $input['full_name'] ?? '';
     $email = $input['email'] ?? '';
+    $phone = $input['phone'] ?? '';     // New Field
     $college = $input['college_name'] ?? '';
     $lensLink = $input['lens_link'] ?? '';
 
-    // Apply Defaults (Matching your Database Schema)
+    // Apply Defaults
     $gender = $input['gender'] ?? 'Not Specified';
-    $category = $input['category'] ?? 'Lens'; // Default to 'Lens' if empty
+    $category = $input['category'] ?? 'Lens';
 
-    if (empty($name) || empty($email) || empty($college) || empty($lensLink)) {
-        throw new Exception("Missing required fields.");
+    // Check Required Fields
+    if (empty($name) || empty($email) || empty($phone) || empty($college) || empty($lensLink)) {
+        throw new Exception("Missing required fields: Name, Email, Phone, College, or Lens Link.");
     }
 
     // Basic URL validation
@@ -36,19 +38,22 @@ try {
         throw new Exception("Invalid Lens URL format.");
     }
 
-    // 4. INSERT TO INBOX
-    // Explicitly inserting 'category' to match the new table structure
-    $sql = "INSERT INTO inbox_lens
-            (raw_name, raw_email, raw_college, gender, lens_link, category, submission_ip, is_processed)
-            VALUES (?, ?, ?, ?, ?, ?, ?, 0)";
-
-    $stmt = $conn->prepare($sql);
+    // 5. HIGH-SPEED INSERT
+    // Dumping into 'inbox_lens' for the Cron Job to pick up later.
 
     $ip = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
+
+    $sql = "INSERT INTO inbox_lens
+            (raw_name, raw_email, raw_phone, raw_college, gender,
+             lens_link, category, submission_ip, is_processed)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)";
+
+    $stmt = $conn->prepare($sql);
 
     $stmt->execute([
         $name,
         $email,
+        $phone,
         $college,
         $gender,
         $lensLink,
@@ -56,7 +61,7 @@ try {
         $ip
     ]);
 
-    // 5. SUCCESS
+    // 6. SUCCESS
     http_response_code(200);
     echo json_encode([
         'status' => 'success',

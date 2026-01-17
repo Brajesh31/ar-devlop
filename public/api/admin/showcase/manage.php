@@ -9,14 +9,15 @@ header('Content-Type: application/json');
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') exit(0);
 
-require_once '../../../config/db.php';
+// 2. CONFIGURATION
+// Relative path to api/config/db.php
+require_once '../../config/db.php';
 
-// 2. INPUT PARSING
+// 3. INPUT PARSING
 $data = json_decode(file_get_contents("php://input"), true);
 
-// Parameters
-$action = $data['action'] ?? ''; // 'publish', 'feature', 'delete'
-$id = $data['id'] ?? null;       // The ID in the MASTER table
+$action = $data['action'] ?? ''; // 'approve', 'reject', 'feature', 'unfeature'
+$id = $data['id'] ?? 0;
 $type = $data['type'] ?? 'showcase'; // 'showcase' or 'lens'
 
 if (!$id || !$action) {
@@ -27,27 +28,32 @@ if (!$id || !$action) {
 try {
     $conn->beginTransaction();
 
-    // =================================================================
-    // LOGIC FOR SHOWCASE (VIDEOS)
-    // =================================================================
+    // ==========================================
+    // CASE 1: SHOWCASE (VIDEO)
+    // ==========================================
     if ($type === 'showcase') {
+        $masterTable = 'master_showcase';
+        $galleryTable = 'showcase_gallery';
 
-        // Fetch Item
-        $stmt = $conn->prepare("SELECT * FROM master_showcase WHERE id = ?");
+        // Fetch Master Record to get file path
+        $stmt = $conn->prepare("SELECT * FROM $masterTable WHERE id = ?");
         $stmt->execute([$id]);
         $item = $stmt->fetch(PDO::FETCH_ASSOC);
 
-        if (!$item) throw new Exception("Video Project not found.");
+        if (!$item) throw new Exception("Project not found");
 
-        // --- ACTION: PUBLISH ---
-        if ($action === 'publish') {
-            // Check if already in gallery
-            $check = $conn->prepare("SELECT id FROM showcase_gallery WHERE master_id = ?");
+        // --- ACTION: APPROVE (PUBLISH) ---
+        if ($action === 'approve') {
+            // 1. Mark Master as Published
+            $conn->prepare("UPDATE $masterTable SET status = 'published' WHERE id = ?")->execute([$id]);
+
+            // 2. Check if already in Gallery
+            $check = $conn->prepare("SELECT id FROM $galleryTable WHERE master_id = ?");
             $check->execute([$id]);
 
             if (!$check->fetch()) {
-                // Copy ALL new fields to Gallery
-                $sql = "INSERT INTO showcase_gallery
+                // 3. Copy to Gallery (Public Website)
+                $sql = "INSERT INTO $galleryTable
                         (master_id, student_name, college_name, project_title, project_description, category, tech_stack, video_url, lens_link)
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
@@ -59,55 +65,64 @@ try {
                     $item['project_description'],
                     $item['category'],
                     $item['tech_stack'],
-                    $item['video_path'],
+                    $item['video_path'], // Maps to video_url
                     $item['lens_link']
                 ]);
             }
-            // Mark Master as Published
-            $conn->prepare("UPDATE master_showcase SET status = 'published' WHERE id = ?")->execute([$id]);
             echo json_encode(['status' => 'success', 'message' => 'Project Published to Website']);
+        }
+
+        // --- ACTION: REJECT (DELETE) ---
+        elseif ($action === 'reject') {
+            // 1. Delete Video File from Server (Save Space!)
+            // Path in DB is like '/uploads/videos/...'
+            // We need to go back 3 levels to reach 'public' then find uploads
+            $filePath = '../../..' . $item['video_path'];
+
+            if (file_exists($filePath)) {
+                unlink($filePath); // Delete file
+            }
+
+            // 2. Delete Record (Cascading delete removes from Gallery too)
+            $conn->prepare("DELETE FROM $masterTable WHERE id = ?")->execute([$id]);
+            echo json_encode(['status' => 'success', 'message' => 'Project Rejected & File Deleted']);
         }
 
         // --- ACTION: FEATURE ---
         elseif ($action === 'feature') {
-            $shouldFeature = $data['value'] ? 1 : 0;
-            $conn->prepare("UPDATE showcase_gallery SET is_featured = ? WHERE master_id = ?")->execute([$shouldFeature, $id]);
-            echo json_encode(['status' => 'success', 'message' => 'Feature status updated']);
+             $conn->prepare("UPDATE $galleryTable SET is_featured = 1 WHERE master_id = ?")->execute([$id]);
+             echo json_encode(['status' => 'success', 'message' => 'Project marked as Featured']);
         }
 
-        // --- ACTION: DELETE ---
-        elseif ($action === 'delete') {
-            // 1. Delete Video File
-            $filePath = '../../..' . $item['video_path'];
-            if (file_exists($filePath)) {
-                unlink($filePath);
-            }
-
-            // 2. Delete from DB (Cascade will remove from Gallery too)
-            $conn->prepare("DELETE FROM master_showcase WHERE id = ?")->execute([$id]);
-            echo json_encode(['status' => 'success', 'message' => 'Project Deleted & File Removed']);
+        elseif ($action === 'unfeature') {
+             $conn->prepare("UPDATE $galleryTable SET is_featured = 0 WHERE master_id = ?")->execute([$id]);
+             echo json_encode(['status' => 'success', 'message' => 'Project removed from Featured']);
         }
     }
 
-    // =================================================================
-    // LOGIC FOR LENSES (LINKS)
-    // =================================================================
-    else {
+    // ==========================================
+    // CASE 2: LENS (LINKS)
+    // ==========================================
+    elseif ($type === 'lens') {
+        $masterTable = 'master_lens';
+        $galleryTable = 'lens_gallery';
 
-        // Fetch Item
-        $stmt = $conn->prepare("SELECT * FROM master_lens WHERE id = ?");
+        $stmt = $conn->prepare("SELECT * FROM $masterTable WHERE id = ?");
         $stmt->execute([$id]);
         $item = $stmt->fetch(PDO::FETCH_ASSOC);
 
-        if (!$item) throw new Exception("Lens not found.");
+        if (!$item) throw new Exception("Lens not found");
 
-        // --- ACTION: PUBLISH ---
-        if ($action === 'publish') {
-            $check = $conn->prepare("SELECT id FROM lens_gallery WHERE master_id = ?");
+        if ($action === 'approve') {
+            $conn->prepare("UPDATE $masterTable SET status = 'published' WHERE id = ?")->execute([$id]);
+
+            $check = $conn->prepare("SELECT id FROM $galleryTable WHERE master_id = ?");
             $check->execute([$id]);
 
             if (!$check->fetch()) {
-                $sql = "INSERT INTO lens_gallery (master_id, student_name, lens_link, category) VALUES (?, ?, ?, ?)";
+                $sql = "INSERT INTO $galleryTable
+                        (master_id, student_name, lens_link, category)
+                        VALUES (?, ?, ?, ?)";
                 $conn->prepare($sql)->execute([
                     $id,
                     $item['student_name'],
@@ -115,21 +130,23 @@ try {
                     $item['category']
                 ]);
             }
-            $conn->prepare("UPDATE master_lens SET status = 'published' WHERE id = ?")->execute([$id]);
-            echo json_encode(['status' => 'success', 'message' => 'Lens Published to Website']);
+            echo json_encode(['status' => 'success', 'message' => 'Lens Published']);
         }
 
-        // --- ACTION: FEATURE ---
-        elseif ($action === 'feature') {
-            $shouldFeature = $data['value'] ? 1 : 0;
-            $conn->prepare("UPDATE lens_gallery SET is_featured = ? WHERE master_id = ?")->execute([$shouldFeature, $id]);
-            echo json_encode(['status' => 'success', 'message' => 'Feature status updated']);
-        }
-
-        // --- ACTION: DELETE ---
-        elseif ($action === 'delete') {
-            $conn->prepare("DELETE FROM master_lens WHERE id = ?")->execute([$id]);
+        elseif ($action === 'reject') {
+            // No file to delete for Lens
+            $conn->prepare("DELETE FROM $masterTable WHERE id = ?")->execute([$id]);
             echo json_encode(['status' => 'success', 'message' => 'Lens Deleted']);
+        }
+
+        elseif ($action === 'feature') {
+             $conn->prepare("UPDATE $galleryTable SET is_featured = 1 WHERE master_id = ?")->execute([$id]);
+             echo json_encode(['status' => 'success', 'message' => 'Lens Featured']);
+        }
+
+        elseif ($action === 'unfeature') {
+             $conn->prepare("UPDATE $galleryTable SET is_featured = 0 WHERE master_id = ?")->execute([$id]);
+             echo json_encode(['status' => 'success', 'message' => 'Lens Un-featured']);
         }
     }
 
@@ -137,7 +154,7 @@ try {
 
 } catch (Exception $e) {
     if ($conn->inTransaction()) $conn->rollBack();
-    http_response_code(500);
+    http_response_code(400);
     echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
 }
 ?>

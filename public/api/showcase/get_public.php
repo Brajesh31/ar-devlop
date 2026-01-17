@@ -1,7 +1,7 @@
 <?php
 // public/api/showcase/get_public.php
 
-// 1. HEADERS (Public Access)
+// 1. HEADERS
 header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Methods: GET");
 header('Content-Type: application/json');
@@ -9,31 +9,52 @@ header('Content-Type: application/json');
 require_once '../../config/db.php';
 
 try {
-    // 2. QUERY FOR PUBLIC DISPLAY
-    // STRICT RULE: Only Approved Projects
-    // STRICT RULE: No Sensitive Data (Email/Phone)
+    // 2. FETCH FROM GALLERY TABLE
+    // We strictly use 'showcase_gallery' (Public Layer), NOT 'master_showcase'.
+    // This ensures we only show Approved & Published items.
 
     $sql = "SELECT
+                id,
+                student_name,
+                college_name,
                 project_title,
+                project_description,
+                category,
+                tech_stack,
                 video_url,
                 lens_link,
-                full_name as student_name,
-                college_name,
-                submitted_at,
-                is_featured
-            FROM master_showcase
-            WHERE admin_status = 'approved'
-            ORDER BY is_featured DESC, submitted_at DESC";
+                views,
+                likes,
+                is_featured,
+                created_at
+            FROM showcase_gallery
+            ORDER BY is_featured DESC, created_at DESC";
 
     $stmt = $conn->prepare($sql);
     $stmt->execute();
-    $projects = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    // 3. RETURN CLEAN DATA
+    // 3. SEGREGATE DATA (For your 3-Section Frontend)
+    $featured = [];
+    $allProjects = [];
+
+    foreach ($rows as $row) {
+        // "All" contains everything (for the main grid)
+        $allProjects[] = $row;
+
+        // "Featured" contains only marked items (for the top slider)
+        if ($row['is_featured'] == 1) {
+            $featured[] = $row;
+        }
+    }
+
+    // 4. RETURN STRUCTURED JSON
     echo json_encode([
         'status' => 'success',
-        'count' => count($projects),
-        'projects' => $projects
+        'data' => [
+            'featured' => $featured, // Section 1: Top Featured
+            'all'      => $allProjects // Section 2: All Videos
+        ]
     ]);
 
 } catch (Exception $e) {

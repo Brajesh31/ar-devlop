@@ -2,6 +2,7 @@
 // public/api/cron/process_inbox.php
 
 // 1. CONFIGURATION
+// Relative path to api/config/db.php from api/cron/
 require_once '../../config/db.php';
 
 header('Content-Type: text/plain');
@@ -17,15 +18,17 @@ try {
     // =================================================================
     // 1. MOVE VIDEOS: Inbox -> Master Showcase
     // =================================================================
-    // Select batch of 50 to prevent timeout
-    $stmtVid = $conn->query("SELECT * FROM inbox_showcase LIMIT 50");
+    // Select batch of 100 (High Volume Processing)
+    $stmtVid = $conn->query("SELECT * FROM inbox_showcase LIMIT 100");
     $videos = $stmtVid->fetchAll(PDO::FETCH_ASSOC);
 
     if ($videos) {
         // Prepare Insert into Master (Default status: pending)
         $insMaster = $conn->prepare("INSERT INTO master_showcase
-            (student_name, email, college_name, gender, project_title, project_description, category, tech_stack, video_path, lens_link, status, received_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)");
+            (student_name, email, phone, college_name, gender,
+             project_title, project_description, category, tech_stack,
+             video_path, lens_link, status, received_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)");
 
         // Prepare Delete from Inbox
         $delInbox = $conn->prepare("DELETE FROM inbox_showcase WHERE inbox_id = ?");
@@ -35,6 +38,7 @@ try {
             $insMaster->execute([
                 $row['raw_name'],
                 $row['raw_email'],
+                $row['raw_phone'],
                 $row['raw_college'],
                 $row['gender'],
                 $row['project_title'],
@@ -55,13 +59,14 @@ try {
     // =================================================================
     // 2. MOVE LENSES: Inbox -> Master Lens
     // =================================================================
-    $stmtLens = $conn->query("SELECT * FROM inbox_lens LIMIT 50");
+    $stmtLens = $conn->query("SELECT * FROM inbox_lens LIMIT 100");
     $lenses = $stmtLens->fetchAll(PDO::FETCH_ASSOC);
 
     if ($lenses) {
         $insMasterLens = $conn->prepare("INSERT INTO master_lens
-            (student_name, email, college_name, gender, lens_link, category, status, received_at)
-            VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)");
+            (student_name, email, phone, college_name, gender,
+             lens_link, category, status, received_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?)");
 
         $delInboxLens = $conn->prepare("DELETE FROM inbox_lens WHERE inbox_id = ?");
 
@@ -69,6 +74,7 @@ try {
             $insMasterLens->execute([
                 $row['raw_name'],
                 $row['raw_email'],
+                $row['raw_phone'],
                 $row['raw_college'],
                 $row['gender'],
                 $row['lens_link'],
@@ -83,7 +89,7 @@ try {
     // =================================================================
     // 3. MAGIC SYNC (Link Registered Users)
     // =================================================================
-    // Now that data is in the Master tables, we link it to real users.
+    // This connects the submission to the Student Dashboard via Email
 
     // Sync Showcase
     $conn->exec("UPDATE master_showcase m
@@ -98,7 +104,7 @@ try {
                  WHERE m.user_id IS NULL");
 
     $conn->commit();
-    echo "SUCCESS: Moved $movedVideos Videos and $movedLenses Lenses to Master Lists. Inbox Cleared.";
+    echo "SUCCESS: Processed $movedVideos Videos and $movedLenses Lenses. Inbox Cleared.";
 
 } catch (Exception $e) {
     if ($conn->inTransaction()) $conn->rollBack();
