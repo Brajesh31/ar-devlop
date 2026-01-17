@@ -5,7 +5,7 @@ import {
     Trophy,
     Users,
     School,
-    MonitorPlay,
+    MonitorPlay, // For Showcase
     FileText,
     Briefcase,
     Award,
@@ -30,7 +30,7 @@ import {
     MousePointer,
     UserCheck,
     Cpu,
-    Link // Added for Lens Submissions
+    Glasses // Using 'Glasses' or 'Link' for Lens
 } from 'lucide-react';
 
 export interface NavItem {
@@ -150,24 +150,29 @@ export const adminNavigation: NavItem[] = [
             { title: "College Analytics", url: "/admin/colleges/analytics" },
         ]
     },
+
+    // === UPDATED SECTION: SHOWCASE ===
     {
         title: "Showcase (Videos)",
         icon: MonitorPlay,
         items: [
-            { title: "Pending Approvals", url: "/admin/showcase/pending", icon: Clock },
-            { title: "Approved Projects", url: "/admin/showcase/approved", icon: CheckCircle },
-            { title: "Main Page Video", url: "/admin/showcase/main-video", icon: Video },
+            { title: "Manage All Videos", url: "/admin/showcase/manage", icon: List }, // Unified Pending/Approved Table
+            { title: "Export Data (CSV)", url: "/admin/showcase/export", icon: FileText },
+            { title: "View Live Gallery", url: "/showcase", icon: Globe }, // Direct link to website
         ]
     },
+
+    // === UPDATED SECTION: LENS ===
     {
         title: "Lens Submissions",
-        icon: Link,
+        icon: Glasses, // Or Link
         items: [
-            { title: "Verified Lenses", url: "/admin/lens/verified", icon: UserCheck },
-            { title: "Guest Lenses", url: "/admin/lens/guest", icon: Globe },
-            { title: "Export Data", url: "/admin/lens/export", icon: FileText },
+            { title: "Manage All Lenses", url: "/admin/lens/manage", icon: List }, // Unified Pending/Verified Table
+            { title: "Export Data (CSV)", url: "/admin/lens/export", icon: FileText },
+            { title: "View Live Gallery", url: "/lens", icon: Globe },
         ]
     },
+
     {
         title: "Resources",
         icon: FileText,

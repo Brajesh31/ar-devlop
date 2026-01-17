@@ -1,7 +1,7 @@
 /**
  * API Service Layer
  * Connects frontend components to PHP backend APIs using Axios
- * * STATUS: Admin Auth, Admin Events, Public Auth, Student Dashboard, SHOWCASE & LENS
+ * STATUS: Admin Auth, Admin Events, Public Auth, Student Dashboard (Separate), SHOWCASE & LENS
  */
 
 import axios, { AxiosRequestConfig } from 'axios';
@@ -34,7 +34,8 @@ export interface ApiResponse<T = any> {
   message?: string;
   url?: string;   // specific to upload
   count?: number;
-  // Admin List Response specific
+
+  // NEW: Admin List Response specific
   meta?: {
     count_verified: number;
     count_guest: number;
@@ -63,7 +64,7 @@ export interface AuthUser {
   institution?: string;
 }
 
-// Student Dashboard Types
+// Student Dashboard Types (Your Original Structure)
 export interface StudentStats {
   eventsRegistered: number;
   hackathonsParticipated: number;
@@ -82,25 +83,28 @@ export interface UpcomingActivity {
 
 // NEW: Showcase & Lens Item Type
 export interface ShowcaseItem {
-  submission_id: number;
-  full_name: string;
+  id: number;
+  student_name: string;
   email: string;
   college_name: string;
 
   // Specific to Showcase (Video)
   project_title?: string;
   video_url?: string;
+  video_path?: string;
 
   // Specific to Lens
   lens_link?: string;
   gender?: string;
 
   // Statuses
-  account_status: 'guest' | 'verified';
-  admin_status?: 'pending' | 'approved' | 'rejected';
-  is_featured?: boolean; // For Showcase only
+  user_id?: number | null;
+  status: 'pending' | 'published' | 'rejected';
+  is_featured?: number | boolean;
+  views?: number;
+  likes?: number;
 
-  submitted_at: string;
+  received_at: string;
 }
 
 // ============================================================================
@@ -136,7 +140,7 @@ async function apiRequest<T>(
 // ============================================================================
 
 export const authService = {
-  // --- ADMIN AUTH ---
+  // --- ADMIN AUTH (UNTOUCHED) ---
   adminLogin: async (credentials: LoginCredentials) => {
     return apiRequest<AuthUser>('/admin/auth/login.php', {
       method: 'POST',
@@ -162,8 +166,7 @@ export const authService = {
     return apiRequest('/admin/auth/logout.php', { method: 'POST' });
   },
 
-  // --- STUDENT / PUBLIC AUTH ---
-
+  // --- STUDENT / PUBLIC AUTH (UNTOUCHED) ---
   login: async (credentials: PublicLoginCredentials) => {
     return apiRequest<any>('/auth/login.php', {
       method: 'POST',
@@ -199,6 +202,8 @@ export interface DashboardStats {
     events: number;
     hackathons: number;
     growth: number;
+    pending_showcase: number; // Added
+    pending_lens: number;     // Added
   };
   activity: Array<{
     user: string;
@@ -210,12 +215,12 @@ export interface DashboardStats {
 }
 
 export const adminService = {
-  // Fetch Dashboard Stats
+  // Fetch Dashboard Stats (Updated to include Pending Counts)
   getStats: async () => {
     return apiRequest<DashboardStats>('/admin/dashboard/stats.php');
   },
 
-  // === IMAGE UPLOAD SERVICE ===
+  // === IMAGE UPLOAD SERVICE (UNTOUCHED) ===
   uploadImage: async (file: File) => {
     const formData = new FormData();
     formData.append('file', file);
@@ -231,7 +236,7 @@ export const adminService = {
     }
   },
 
-  // === EVENTS MANAGEMENT ===
+  // === EVENTS MANAGEMENT (UNTOUCHED) ===
   events: {
     list: async () => {
       return apiRequest<any[]>('/admin/events/list.php');
@@ -265,7 +270,7 @@ export const adminService = {
 
   // === NEW: SHOWCASE & LENS MANAGEMENT ===
   showcase: {
-    // 1. Fetch List (Verified vs Guest)
+    // 1. Fetch List (Verified vs Guest) - Points to our new list_master.php
     getAll: async (type: 'showcase' | 'lens', filters?: {
       status?: string;
       startDate?: string;
@@ -281,7 +286,7 @@ export const adminService = {
       return apiRequest<{
         verified_students: ShowcaseItem[];
         guest_submissions: ShowcaseItem[];
-      }>(`/admin/showcase/list.php?${query.toString()}`);
+      }>(`/admin/showcase/list_master.php?${query.toString()}`);
     },
 
     // 2. Update Status (Approve/Reject)
@@ -296,19 +301,27 @@ export const adminService = {
       });
     },
 
-    // 3. Toggle Feature (Video only)
-    toggleFeatured: async (id: number, isFeatured: boolean) => {
-      return apiRequest('/admin/showcase/update_status.php', {
+    // 3. Toggle Feature
+    toggleFeatured: async (id: number, type: 'showcase' | 'lens', isFeatured: boolean) => {
+      return apiRequest('/admin/showcase/manage.php', {
         method: 'POST',
         data: {
-          submission_id: id,
-          type: 'showcase',
-          is_featured: isFeatured ? 1 : 0
+          id: id,
+          type: type,
+          action: isFeatured ? 'feature' : 'unfeature'
         }
       });
     },
 
-    // 4. Get CSV Export URL
+    // 4. Delete Item
+    deleteItem: async (id: number, type: 'showcase' | 'lens') => {
+      return apiRequest('/admin/showcase/manage.php', {
+        method: 'POST',
+        data: { id, type, action: 'reject' }
+      });
+    },
+
+    // 5. Get CSV Export URL
     getExportUrl: (type: 'showcase' | 'lens', startDate: string, endDate: string) => {
       return `${API_CONFIG.baseUrl}/admin/showcase/export.php?type=${type}&start_date=${startDate}&end_date=${endDate}`;
     }
@@ -320,17 +333,16 @@ export const adminService = {
 // ============================================================================
 
 export const publicService = {
+  // EVENTS (UNTOUCHED)
   events: {
     list: async () => {
       const response = await axios.get(`${API_CONFIG.baseUrl}/events/list.php`);
       return response.data;
     },
-
     getById: async (id: string) => {
       const response = await axios.get(`${API_CONFIG.baseUrl}/events/get.php?id=${id}`);
       return response.data;
     },
-
     register: async (data: any) => {
       return apiRequest('/events/register.php', {
         method: 'POST',
@@ -339,9 +351,8 @@ export const publicService = {
     }
   },
 
-  // === NEW: SHOWCASE SUBMISSIONS ===
+  // === NEW: SHOWCASE (VIDEOS) ===
   showcase: {
-    // 1. Submit Video (Multipart)
     submitVideo: async (formData: FormData) => {
       try {
         const response = await axios.post(`${API_CONFIG.baseUrl}/showcase/submit.php`, formData, {
@@ -355,19 +366,30 @@ export const publicService = {
         };
       }
     },
+    getGallery: async () => {
+      const response = await axios.get(`${API_CONFIG.baseUrl}/showcase/get_public.php`);
+      return response.data;
+    }
+  },
 
-    // 2. Submit Lens (JSON)
+  // === NEW: LENS (AR LINKS) ===
+  lens: {
     submitLens: async (data: any) => {
       return apiRequest('/lens/submit.php', {
         method: 'POST',
         data: data
       });
     },
-
-    // 3. Get Public Gallery
     getGallery: async () => {
-      const response = await axios.get(`${API_CONFIG.baseUrl}/showcase/get_public.php`);
+      const response = await axios.get(`${API_CONFIG.baseUrl}/lens/get_public.php`);
       return response.data;
+    }
+  },
+
+  // === NEW: ANALYTICS ===
+  analytics: {
+    registerView: async (id: number, type: 'showcase' | 'lens') => {
+      axios.post(`${API_CONFIG.baseUrl}/analytics/view.php`, { id, type });
     }
   }
 };
@@ -378,18 +400,27 @@ export const publicService = {
 
 export const studentService = {
 
-  // 1. Get Registered Events (My Events)
+  // 1. Get Registered Events (UNTOUCHED)
   getMyEvents: async () => {
     return apiRequest<any[]>('/student/my_events.php');
   },
 
-  // 2. Get Dashboard Overview Stats (Real Data)
+  // 2. Get Dashboard Stats (UNTOUCHED - As requested)
   getStats: async () => {
     return apiRequest<StudentStats>('/student/dashboard/stats.php');
   },
 
-  // 3. Get Upcoming Activities (Real Data)
+  // 3. Get Upcoming Activities (UNTOUCHED - As requested)
   getUpcoming: async () => {
     return apiRequest<UpcomingActivity[]>('/student/dashboard/upcoming.php');
+  },
+
+  // 4. [NEW] Get My Showcase & Lens Submissions
+  // We use the new backend file to fetch this specific list
+  getMySubmissions: async () => {
+    // This file returns { submissions: { videos: [], lenses: [] }, ... }
+    return apiRequest<{
+      submissions: { videos: ShowcaseItem[], lenses: ShowcaseItem[] }
+    }>('/student/get_dashboard.php');
   }
 };
