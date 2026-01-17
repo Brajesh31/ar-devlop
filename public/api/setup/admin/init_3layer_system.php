@@ -2,7 +2,7 @@
 // public/api/setup/admin/init_3layer_system.php
 
 header('Content-Type: text/plain');
-require_once '../../../config/db.php';
+require_once '../../config/db.php';
 
 try {
     $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
