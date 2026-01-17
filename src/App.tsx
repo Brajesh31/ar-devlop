@@ -47,6 +47,8 @@ import OverallEventAnalytics from "./pages/Admin/Events/OverallEventAnalytics";
 import HackathonsList from "./pages/Admin/Hackathons/HackathonsList";
 import CreateHackathon from "./pages/Admin/Hackathons/CreateHackathon";
 import HackathonManager from "./pages/Admin/Hackathons/HackathonManager";
+import HackathonAnalytics from "./pages/Admin/Hackathons/HackathonAnalytics";
+import HackathonPeople from "./pages/Admin/Hackathons/HackathonPeople";
 
 // --- Showcase & Lens Pages ---
 import { SubmitProjectPage } from "./pages/Showcase/SubmitProjectPage";
@@ -125,6 +127,8 @@ const App = () => (
                   <Route path="hackathons/list" element={<HackathonsList />} />
                   <Route path="hackathons/create" element={<CreateHackathon />} />
                   <Route path="hackathons/manage/:id" element={<HackathonManager />} />
+                  <Route path="hackathons/analytics" element={<HackathonAnalytics />} />
+                  <Route path="hackathons/people" element={<HackathonPeople />} />
                   {/* Note: Edit route can reuse Create or separate Edit component if needed later */}
                   <Route path="hackathons/edit/:id" element={<CreateHackathon />} />
                 </Route>

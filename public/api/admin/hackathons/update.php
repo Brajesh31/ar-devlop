@@ -28,8 +28,6 @@ if (empty($input['id'])) {
 
 try {
     // 4. Build Dynamic Update Query
-    // We construct the SQL string based on what fields were sent.
-
     $fieldsToUpdate = [];
     $params = [':id' => $input['id']];
 
@@ -45,12 +43,8 @@ try {
         'status'                => 'status',
         'mode'                  => 'mode',
         'location'              => 'location',
-
-        // External URLs
         'registrationUrl'       => 'registration_url',
         'resultsUrl'            => 'results_url',
-
-        // Logistics
         'prizePool'             => 'prize_pool',
         'fee'                   => 'fee_type',
         'feeAmount'             => 'fee_amount',
@@ -60,7 +54,6 @@ try {
         'image'                 => 'banner_image'
     ];
 
-    // Loop through simple columns
     foreach ($columnMap as $frontendKey => $dbColumn) {
         if (array_key_exists($frontendKey, $input)) {
             $fieldsToUpdate[] = "$dbColumn = :$frontendKey";
@@ -69,7 +62,6 @@ try {
     }
 
     // --- MAPPING: JSON Arrays ---
-    // These need json_encode() before saving
     $jsonMap = [
         'tracks'    => 'meta_tracks',
         'mentors'   => 'meta_mentors',
@@ -99,16 +91,9 @@ try {
     $stmt = $conn->prepare($sql);
     $stmt->execute($params);
 
-    if ($stmt->rowCount() > 0) {
-        echo json_encode(["status" => "success", "message" => "Hackathon updated successfully"]);
-    } else {
-        // Row count is 0 if data was identical to what's already in DB, or if ID wasn't found.
-        // We assume success but note no changes were needed.
-        echo json_encode(["status" => "success", "message" => "No changes made (Data was identical or ID not found)"]);
-    }
+    echo json_encode(["status" => "success", "message" => "Hackathon updated successfully"]);
 
 } catch (PDOException $e) {
-    // Handle Duplicate Slug error
     if ($e->getCode() == 23000) {
         http_response_code(409);
         echo json_encode(["status" => "error", "message" => "The provided Slug is already taken."]);
