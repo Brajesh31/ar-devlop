@@ -1,208 +1,206 @@
-// src/pages/showcase/SubmitProjectPage.tsx
-import React, { useState } from 'react';
-// FIX: Imported 'Variants' for strict typing
-import { motion, Variants } from 'framer-motion';
-import { Header } from '@/components/layout/Header';
-import { Footer } from '@/components/layout/Footer';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Badge } from '@/components/ui/badge';
-import { Label } from '@/components/ui/label';
-import { ArrowLeft, Upload, Zap, Layers, CheckCircle2 } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { useRef, useEffect } from 'react';
+import { motion, useScroll, useTransform, useSpring, Variants } from 'framer-motion';
+import { ShowcaseProject } from '@/data/showcase';
+import { ProjectCard } from './ProjectCard';
 
-// --- FRAMER VARIANTS ---
-// FIX: Explicitly typed as 'Variants' to fix TS errors
-const formReveal: Variants = {
-    hidden: { opacity: 0, y: 40, filter: 'blur(10px)' },
+interface FeaturedProjectsProps {
+    projects: ShowcaseProject[];
+    onViewDetails?: (project: ShowcaseProject) => void;
+}
+
+// --- MASTER "BUTTER-SMOOTH" VARIANTS ---
+const containerVariants: Variants = {
+    hidden: { opacity: 0 },
+    visible: {
+        opacity: 1,
+        transition: {
+            staggerChildren: 0.1,
+            delayChildren: 0.05,
+        },
+    },
+};
+
+const card3DVariants: Variants = {
+    hidden: {
+        opacity: 0,
+        y: 40,
+        scale: 0.95,
+        filter: 'blur(8px)',
+        rotateX: 3
+    },
     visible: {
         opacity: 1,
         y: 0,
+        scale: 1,
         filter: 'blur(0px)',
+        rotateX: 0,
         transition: {
             duration: 0.8,
-            // FIX: Added 'as const' to satisfy Bezier Tuple requirement
             ease: [0.16, 1, 0.3, 1] as const
-        }
-    }
+        },
+    },
 };
 
-export const SubmitProjectPage = () => {
-    const [isSubmitted, setIsSubmitted] = useState(false);
-    const [tags, setTags] = useState<string[]>([]);
-    const [currentTag, setCurrentTag] = useState("");
+export const FeaturedProjects = ({ projects, onViewDetails }: FeaturedProjectsProps) => {
+    const containerRef = useRef<HTMLDivElement>(null);
 
-    // FIX: Added specific HTMLInputElement type
-    const handleTagAdd = (e: React.KeyboardEvent<HTMLInputElement>) => {
-        if (e.key === 'Enter' && currentTag.trim()) {
-            e.preventDefault();
-            setTags([...tags, currentTag.trim()]);
-            setCurrentTag("");
-        }
-    };
+    // High-Performance Scroll Physics
+    const { scrollYProgress } = useScroll({
+        target: containerRef,
+        offset: ["start end", "end start"]
+    });
 
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        // Simulate API call
-        // Note: In a real app, ensure this is cleaned up if the component unmounts
-        setTimeout(() => setIsSubmitted(true), 1500);
-    };
+    // "Shock Absorber" Physics
+    const smoothY = useSpring(scrollYProgress, {
+        damping: 20,
+        stiffness: 100,
+        mass: 0.5,
+        restDelta: 0.001
+    });
 
-    if (isSubmitted) {
-        return (
-            <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
-                <motion.div
-                    initial={{ scale: 0.8, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    className="bg-white rounded-[32px] p-8 md:p-12 text-center max-w-lg shadow-2xl border border-slate-100"
-                >
-                    <div className="w-20 h-20 bg-emerald-50 text-[#10B981] rounded-full flex items-center justify-center mx-auto mb-6">
-                        <CheckCircle2 size={40} />
-                    </div>
-                    <h2 className="text-3xl font-black text-slate-900 mb-4">Transmission Received</h2>
-                    <p className="text-slate-500 mb-8">
-                        Your project has been uploaded to the grid. Our architects will review your submission shortly.
-                    </p>
-                    <Link to="/showcase">
-                        <Button className="w-full h-12 rounded-xl bg-slate-900 text-white font-bold uppercase tracking-widest">
-                            Return to Matrix
-                        </Button>
-                    </Link>
-                </motion.div>
-            </div>
+    const yBg = useTransform(smoothY, [0, 1], [0, -80]);
+    const ySecondary = useTransform(smoothY, [0, 1], [0, 60]);
+
+    // --- AUTO-PLAY LOGIC (MOBILE & SCROLL) ---
+    useEffect(() => {
+        // Only run this logic to auto-play videos that scroll into view
+        const observer = new IntersectionObserver(
+            (entries) => {
+                entries.forEach((entry) => {
+                    // Find the video element inside the card
+                    const video = entry.target.querySelector('video');
+                    if (!video) return;
+
+                    if (entry.isIntersecting) {
+                        // Play when in view (browser requires muted=true for this to work)
+                        const playPromise = video.play();
+                        if (playPromise !== undefined) {
+                            playPromise.catch(() => {
+                                // Auto-play was prevented (usually if unmuted or battery saver)
+                            });
+                        }
+                    } else {
+                        // Pause when out of view to save resources
+                        video.pause();
+                    }
+                });
+            },
+            {
+                threshold: 0.6 // Play when 60% of the card is visible
+            }
         );
-    }
+
+        // Observe all project cards
+        const cards = document.querySelectorAll('.project-card-container');
+        cards.forEach((card) => observer.observe(card));
+
+        return () => {
+            cards.forEach((card) => observer.unobserve(card));
+        };
+    }, [projects]);
+
+    // If no featured projects passed from DB, hide section
+    if (!projects || projects.length === 0) return null;
 
     return (
-        <div className="min-h-screen bg-slate-50 selection:bg-[#FF6B35]/20 selection:text-[#FF6B35]">
-            <Header />
+        <section ref={containerRef} className="relative py-8 md:py-12 overflow-hidden bg-slate-50 perspective-2000 transform-gpu">
 
-            <main className="pt-32 pb-20 relative overflow-hidden">
+            {/* --- LAYER 0: OPTIMIZED HOLOGRAPHIC MESH --- */}
+            <div className="absolute inset-0 pointer-events-none overflow-hidden select-none">
+                <div className="absolute inset-0 opacity-[0.02] bg-[url('https://grainy-gradients.vercel.app/noise.svg')] mix-blend-multiply" />
+                <motion.div
+                    style={{ y: yBg }}
+                    className="absolute top-0 right-0 w-[800px] h-[800px] bg-gradient-to-bl from-[#FF6B35]/10 via-[#FBBF24]/10 to-transparent rounded-full blur-[80px] will-change-transform"
+                />
+                <motion.div
+                    style={{ y: ySecondary }}
+                    className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-gradient-to-tr from-[#FBBF24]/15 via-[#FF6B35]/5 to-transparent rounded-full blur-[70px] will-change-transform"
+                />
+            </div>
 
-                {/* --- LAYER 0: BACKGROUND PHYSICS --- */}
-                <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
-                    <div className="absolute inset-0 opacity-[0.02] bg-[url('https://grainy-gradients.vercel.app/noise.svg')] mix-blend-multiply" />
-                    <motion.div
-                        animate={{ y: [0, -50, 0], opacity: [0.3, 0.5, 0.3] }}
-                        transition={{ duration: 10, repeat: Infinity }}
-                        className="absolute top-0 right-0 w-[600px] h-[600px] bg-gradient-to-bl from-[#FF6B35]/10 to-transparent rounded-full blur-[100px]"
-                    />
-                </div>
+            <div className="container-wide relative z-10 px-4 md:px-8">
 
-                <div className="container max-w-4xl relative z-10 px-4">
+                {/* --- LAYER 1: HEADER --- */}
+                <motion.div
+                    initial={{ opacity: 0, x: -40, filter: 'blur(8px)' }}
+                    whileInView={{ opacity: 1, x: 0, filter: 'blur(0px)' }}
+                    viewport={{ once: true, margin: "-50px" }}
+                    transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] as const }}
+                    className="mb-8 max-w-4xl"
+                >
+                    <h2 className="text-5xl md:text-8xl font-black text-slate-900 tracking-tighter leading-[0.85]">
+                        Hall of <br />
+                        <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#FBBF24] via-[#FF6B35] to-[#FBBF24] bg-[length:200%_auto] animate-gradient-x">
+              Fame
+            </span>
+                    </h2>
+                </motion.div>
 
-                    {/* Back Link */}
-                    <Link to="/showcase" className="inline-flex items-center gap-2 text-slate-400 hover:text-[#FF6B35] transition-colors mb-8 font-bold text-xs uppercase tracking-widest">
-                        <ArrowLeft size={14} /> Back to Gallery
-                    </Link>
-
-                    {/* Form Container */}
-                    <motion.div
-                        variants={formReveal}
-                        initial="hidden"
-                        animate="visible"
-                        className="bg-white rounded-[40px] shadow-xl border border-slate-100 overflow-hidden"
-                    >
-                        {/* Header Plate */}
-                        <div className="p-8 md:p-12 border-b border-slate-100 bg-slate-50/50 relative">
-                            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-[#FF6B35] via-[#FBBF24] to-[#3B82F6]" />
-                            <h1 className="text-3xl md:text-5xl font-black text-slate-900 tracking-tighter mb-2">
-                                Submit Project
-                            </h1>
-                            <p className="text-slate-500 font-medium max-w-xl">
-                                Fill out the manifest below to deploy your AR/VR project to the BharatXR showcase.
-                            </p>
-                        </div>
-
-                        {/* Input Matrix */}
-                        <form onSubmit={handleSubmit} className="p-8 md:p-12 space-y-8">
-
-                            {/* Section 1: Core Data */}
-                            <div className="space-y-6">
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    <div className="space-y-2">
-                                        <Label className="text-xs font-black uppercase tracking-widest text-slate-400">Project Title</Label>
-                                        <Input placeholder="e.g. Neo-Tokyo VR" className="h-14 rounded-xl border-slate-200 focus:border-[#FF6B35] focus:ring-0 text-lg font-bold bg-slate-50/50 transition-all" />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label className="text-xs font-black uppercase tracking-widest text-slate-400">Project URL</Label>
-                                        <Input placeholder="https://" className="h-14 rounded-xl border-slate-200 focus:border-[#FF6B35] focus:ring-0 text-lg font-medium bg-slate-50/50 transition-all" />
-                                    </div>
-                                </div>
-
-                                <div className="space-y-2">
-                                    <Label className="text-xs font-black uppercase tracking-widest text-slate-400">Description</Label>
-                                    <Textarea placeholder="Describe your reality..." className="min-h-[120px] rounded-xl border-slate-200 focus:border-[#FF6B35] focus:ring-0 text-base font-medium bg-slate-50/50 transition-all resize-none p-4" />
+                {/* --- LAYER 2: 3D PRISM GRID --- */}
+                <motion.div
+                    className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8 perspective-1000"
+                    variants={containerVariants}
+                    initial="hidden"
+                    whileInView="visible"
+                    viewport={{ once: true, margin: "-50px" }}
+                >
+                    {/* RENDER THE DB PROJECTS PASSED AS PROPS */}
+                    {projects.slice(0, 3).map((project, index) => (
+                        <motion.div
+                            key={project.id}
+                            variants={card3DVariants}
+                            whileHover={{
+                                y: -10,
+                                rotateX: 2,
+                                rotateY: 2,
+                                transition: { type: "spring", stiffness: 150, damping: 15 }
+                            }}
+                            className="relative group h-full preserve-3d will-change-transform project-card-container" // Added class for observer
+                        >
+                            {/* Floating Rank Badge */}
+                            <div className="absolute -top-4 -right-4 z-30 transform-gpu group-hover:translate-y-[-5px] transition-transform duration-500">
+                                <div className="w-12 h-12 bg-white border-2 border-slate-100 rounded-full flex items-center justify-center shadow-xl group-hover:shadow-[#FBBF24]/30 transition-shadow">
+                                    <span className="text-base font-black text-slate-900 italic">#{index + 1}</span>
                                 </div>
                             </div>
 
-                            {/* Section 2: Tech Specs */}
-                            <div className="p-6 rounded-2xl bg-slate-50 border border-slate-100 space-y-6">
-                                <div className="flex items-center gap-2 mb-2">
-                                    <Layers size={16} className="text-[#FBBF24]" />
-                                    <span className="text-xs font-black uppercase tracking-widest text-slate-500">Technical Manifest</span>
+                            {/* Refractive Colored Shadow */}
+                            <div className="absolute inset-4 bg-gradient-to-br from-[#FBBF24] to-[#FF6B35] blur-xl opacity-0 group-hover:opacity-20 transition-opacity duration-500 transform translate-y-2 will-change-transform" />
+
+                            {/* Card Container */}
+                            <div className="relative h-full rounded-[30px] overflow-hidden bg-white border border-slate-200 group-hover:border-transparent transition-colors duration-500 shadow-lg group-hover:shadow-xl">
+
+                                {/* Internal Prism Border */}
+                                <div className="absolute inset-0 p-[2px] rounded-[30px] bg-gradient-to-br from-[#FBBF24] via-[#FF6B35] to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none">
+                                    <div className="w-full h-full bg-white rounded-[28px]" />
                                 </div>
 
-                                <div className="space-y-2">
-                                    <Label className="text-xs font-bold text-slate-400">Tech Stack (Press Enter to add)</Label>
-                                    <div className="flex flex-wrap gap-2 mb-3">
-                                        {tags.map(tag => (
-                                            <Badge key={tag} className="bg-white text-slate-700 border border-slate-200 px-3 py-1">
-                                                {tag}
-                                            </Badge>
-                                        ))}
-                                    </div>
-                                    <Input
-                                        value={currentTag}
-                                        onChange={(e) => setCurrentTag(e.target.value)}
-                                        onKeyDown={handleTagAdd}
-                                        placeholder="e.g. Unity, Three.js, Lens Studio"
-                                        className="h-12 rounded-xl bg-white border-slate-200"
+                                {/* Holographic Overlay */}
+                                <div className="absolute inset-0 bg-gradient-to-tr from-white via-transparent to-transparent opacity-0 group-hover:opacity-40 transition-opacity duration-500 pointer-events-none z-20" />
+
+                                <div className="relative z-10 h-full">
+                                    <ProjectCard
+                                        project={project}
+                                        featured
+                                        onViewDetails={onViewDetails}
                                     />
                                 </div>
-
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    <div className="space-y-2">
-                                        <Label className="text-xs font-bold text-slate-400">Category</Label>
-                                        <select className="w-full h-12 rounded-xl border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 outline-none focus:border-[#FF6B35]">
-                                            <option>Augmented Reality (AR)</option>
-                                            <option>Virtual Reality (VR)</option>
-                                            <option>WebXR</option>
-                                            <option>Snap Lens</option>
-                                        </select>
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label className="text-xs font-bold text-slate-400">Creator ID / Team Name</Label>
-                                        <Input placeholder="Who built this?" className="h-12 rounded-xl bg-white border-slate-200" />
-                                    </div>
-                                </div>
                             </div>
+                        </motion.div>
+                    ))}
+                </motion.div>
 
-                            {/* Section 3: Visuals */}
-                            <div className="space-y-2">
-                                <Label className="text-xs font-black uppercase tracking-widest text-slate-400">Thumbnail Upload</Label>
-                                <div className="border-2 border-dashed border-slate-200 rounded-2xl h-32 flex flex-col items-center justify-center text-slate-400 hover:border-[#FF6B35] hover:bg-[#FF6B35]/5 transition-all cursor-pointer group">
-                                    <Upload size={24} className="mb-2 group-hover:scale-110 transition-transform" />
-                                    <span className="text-xs font-bold uppercase tracking-wide">Drop Holo-Data Here</span>
-                                </div>
-                            </div>
-
-                            {/* Action */}
-                            <div className="pt-4">
-                                <Button type="submit" className="w-full h-16 rounded-2xl bg-gradient-to-r from-slate-900 to-slate-800 hover:to-[#3B82F6] text-white text-sm font-black uppercase tracking-[0.2em] shadow-xl transition-all duration-500 group">
-                    <span className="flex items-center gap-2">
-                       <Zap size={18} className="text-[#FBBF24] group-hover:scale-110 transition-transform" />
-                       Initialize Launch
-                    </span>
-                                </Button>
-                            </div>
-
-                        </form>
-                    </motion.div>
+                {/* --- LAYER 3: DIVIDER LINE --- */}
+                <div className="flex justify-center mt-12">
+                    <motion.div
+                        initial={{ width: 0, opacity: 0 }}
+                        whileInView={{ width: "100%", opacity: 1 }}
+                        viewport={{ once: true }}
+                        transition={{ duration: 1.2, delay: 0.2, ease: [0.16, 1, 0.3, 1] as const }}
+                        className="h-[1px] max-w-2xl bg-gradient-to-r from-transparent via-slate-200 to-transparent"
+                    />
                 </div>
-            </main>
-            <Footer />
-        </div>
+            </div>
+        </section>
     );
 };

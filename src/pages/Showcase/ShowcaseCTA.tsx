@@ -1,12 +1,9 @@
-// src/pages/showcase/ShowcaseCTA.tsx
 import { Link } from 'react-router-dom';
-// FIX: Import 'Variants' for strict typing
 import { motion, Variants } from 'framer-motion';
 import { Button } from '@/components/ui/button';
-import {  Rocket, Calendar, Zap, Sparkles, PlusCircle } from 'lucide-react';
+import {  Rocket, Calendar, Zap, Sparkles, PlusCircle, Video, Link as LinkIcon } from 'lucide-react';
 
 // --- MASTER FRAMER VARIANTS ---
-// FIX: Explicitly typed as 'Variants'
 const containerVariants: Variants = {
   hidden: { opacity: 0, scale: 0.95, filter: 'blur(10px)' },
   visible: {
@@ -15,13 +12,11 @@ const containerVariants: Variants = {
     filter: 'blur(0px)',
     transition: {
       duration: 0.8,
-      // FIX: Added 'as const' to satisfy Bezier Tuple requirement
       ease: [0.16, 1, 0.3, 1] as const
     }
   }
 };
 
-// FIX: Explicitly typed as 'Variants' to allow string literals for easing
 const floatingVariant: Variants = {
   animate: {
     y: [0, -10, 0],
@@ -89,44 +84,55 @@ export const ShowcaseCTA = () => {
               </h2>
 
               <p className="text-lg md:text-xl text-slate-500 font-medium max-w-xl mb-10 leading-relaxed">
-                Join the ecosystem. Participate in hackathons, attend events, or <span className="text-slate-900 font-bold">submit your own lens</span> to the Prime Selection.
+                Join the ecosystem. Participate in hackathons, attend events, or contribute to the gallery.
               </p>
 
-              {/* Action Matrix (3 Buttons) */}
-              <div className="flex flex-col md:flex-row gap-4 w-full justify-center max-w-3xl mx-auto">
+              {/* Action Matrix (Grid Layout for 4 items) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 w-full max-w-5xl mx-auto">
 
-                {/* 1. Launch Button (Primary) */}
-                <Link to="/hackathons" className="flex-1">
+                {/* 1. Submit Video (Primary Dark) */}
+                <Link to="/showcase/SubmitProjectPage" className="w-full">
                   <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
                     <Button className="w-full h-14 rounded-2xl bg-slate-900 hover:bg-[#3B82F6] text-white text-sm font-black uppercase tracking-widest shadow-xl transition-all duration-300 group">
-                      <Rocket className="w-4 h-4 mr-2 group-hover:-translate-y-1 group-hover:translate-x-1 transition-transform" />
-                      Join Hackathon
+                      <Video className="w-4 h-4 mr-2" />
+                      Submit Video
                     </Button>
                   </motion.div>
                 </Link>
 
-                {/* 2. Submit Project (Featured Action) */}
-                <Link to="/submit-project" className="flex-1">
+                {/* 2. Submit Lens (Solar Gradient) */}
+                <Link to="/showcase/SubmitLensPage" className="w-full">
                   <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
                     <Button className="w-full h-14 rounded-2xl bg-gradient-to-r from-[#FF6B35] to-[#FBBF24] hover:shadow-[0_0_30px_-5px_#FBBF24] text-white text-sm font-black uppercase tracking-widest border-none shadow-lg transition-all duration-300 group relative overflow-hidden">
                       <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300" />
                       <span className="relative flex items-center justify-center">
-                      <PlusCircle className="w-4 h-4 mr-2" />
-                      Submit Lens
-                    </span>
+                        <LinkIcon className="w-4 h-4 mr-2" />
+                        Submit Lens
+                      </span>
                     </Button>
                   </motion.div>
                 </Link>
 
-                {/* 3. Events (Secondary) */}
-                <Link to="/events" className="flex-1">
+                {/* 3. Hackathons (Outline - Fixed Hover) */}
+                <Link to="/hackathons" className="w-full">
                   <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-                    <Button variant="outline" className="w-full h-14 rounded-2xl border-slate-200 bg-white text-slate-600 hover:text-[#FF6B35] hover:border-orange-200 text-sm font-black uppercase tracking-widest transition-all duration-300 group">
+                    <Button variant="outline" className="w-full h-14 rounded-2xl border-slate-200 bg-white text-slate-600 hover:text-[#FF6B35] hover:bg-white hover:border-orange-200 text-sm font-black uppercase tracking-widest transition-all duration-300 group">
+                      <Rocket className="w-4 h-4 mr-2 group-hover:-translate-y-1 group-hover:translate-x-1 transition-transform" />
+                      Hackathons
+                    </Button>
+                  </motion.div>
+                </Link>
+
+                {/* 4. Events (Outline - Fixed Hover) */}
+                <Link to="/events" className="w-full">
+                  <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                    <Button variant="outline" className="w-full h-14 rounded-2xl border-slate-200 bg-white text-slate-600 hover:text-[#FF6B35] hover:bg-white hover:border-orange-200 text-sm font-black uppercase tracking-widest transition-all duration-300 group">
                       <Calendar className="w-4 h-4 mr-2 group-hover:rotate-12 transition-transform" />
                       Events
                     </Button>
                   </motion.div>
                 </Link>
+
               </div>
 
               {/* Micro-Interaction Footer */}

@@ -12,10 +12,13 @@ import { ProgramContext } from './ProgramContext';
 import { ShowcaseCTA } from './ShowcaseCTA';
 import { ProjectDetailModal } from './ProjectDetailModal';
 import { Footer } from '@/components/layout/Footer';
-import { getAllProjects, filterProjects, ProjectCategory, ShowcaseProject } from '@/data/showcase';
+import { ProjectCategory, ShowcaseProject } from '@/data/showcase';
+import { publicService } from '@/services/api';
+import { API_CONFIG } from '@/config/api';
+import { toast } from '@/components/ui/use-toast';
+import { Loader2 } from 'lucide-react';
 
 // --- MASTER FRAMER MOTION VARIANTS ---
-// FIX: Typed as Variants and added 'as const' to ease arrays
 const headerReveal: Variants = {
     hidden: { opacity: 0, y: -40, filter: 'blur(12px)' },
     visible: {
@@ -43,6 +46,9 @@ const sectionSlideUp: Variants = {
 };
 
 const ShowcasePage = () => {
+    // --- STATE MANAGEMENT ---
+    const [loading, setLoading] = useState(true);
+    const [allProjects, setAllProjects] = useState<ShowcaseProject[]>([]);
     const [activeFilters, setActiveFilters] = useState<ProjectCategory[]>([]);
     const [selectedProject, setSelectedProject] = useState<ShowcaseProject | null>(null);
     const [modalOpen, setModalOpen] = useState(false);
@@ -60,11 +66,68 @@ const ShowcasePage = () => {
         return () => lenis.destroy();
     }, []);
 
-    const allProjects = getAllProjects();
-    const filteredProjects = useMemo(() =>
-            filterProjects(allProjects, activeFilters),
-        [activeFilters, allProjects]);
+    // --- 2. FETCH DATA FROM DATABASE ---
+    useEffect(() => {
+        const loadData = async () => {
+            try {
+                const response = await publicService.showcase.getGallery();
 
+                if (response.status === 'success' && Array.isArray(response.projects)) {
+                    // MAP DB DATA TO UI FORMAT
+                    const mappedProjects: ShowcaseProject[] = response.projects.map((item: any, index: number) => ({
+                        id: (index + 1).toString(), // Fallback ID since public endpoint might not expose internal ID
+                        title: item.project_title || "Untitled Project",
+                        description: item.college_name || "Student Project", // Using college as fallback description
+                        creatorName: item.student_name,
+
+                        // Construct absolute Video URL
+                        videoUrl: item.video_url
+                            ? (item.video_url.startsWith('http')
+                                ? item.video_url
+                                : `${API_CONFIG.baseUrl.replace('/api', '')}${item.video_url}`)
+                            : undefined,
+
+                        projectUrl: item.lens_link,
+                        thumbnail: '/placeholder.svg', // Default thumbnail
+
+                        // Default Categories (Since DB tags aren't implemented yet)
+                        categories: ['ar', 'student'] as ProjectCategory[],
+                        techUsed: ['AR', 'Lens'],
+                        builtDuring: new Date(item.submitted_at).getFullYear().toString(),
+                        isFeatured: item.is_featured == 1
+                    }));
+
+                    setAllProjects(mappedProjects);
+                }
+            } catch (error) {
+                console.error("Failed to load showcase:", error);
+                toast({
+                    title: "Connection Issue",
+                    description: "Could not load projects from the database.",
+                    variant: "destructive"
+                });
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        loadData();
+    }, []);
+
+    // --- 3. FILTER LOGIC ---
+    const filteredProjects = useMemo(() => {
+        if (activeFilters.length === 0) return allProjects;
+        return allProjects.filter(project =>
+            project.categories.some(cat => activeFilters.includes(cat))
+        );
+    }, [activeFilters, allProjects]);
+
+    // Split for Featured Section
+    const featuredProjects = useMemo(() =>
+            allProjects.filter(p => p.isFeatured),
+        [allProjects]);
+
+    // --- HANDLERS ---
     const handleFilterToggle = (filter: ProjectCategory) => {
         setActiveFilters((prev) =>
             prev.includes(filter) ? prev.filter((f) => f !== filter) : [...prev, filter]
@@ -133,24 +196,39 @@ const ShowcasePage = () => {
                     />
                 </motion.div>
 
-                {/* --- SECTION 3: THE BENTO GALLERY --- */}
-                <div className="relative z-10 min-h-[50vh] py-16">
-                    <ProjectGallery
-                        projects={filteredProjects}
-                        onViewDetails={handleViewDetails}
-                    />
-                </div>
+                {/* --- LOADING STATE --- */}
+                {loading && (
+                    <div className="flex items-center justify-center min-h-[40vh]">
+                        <Loader2 className="w-10 h-10 animate-spin text-[#FF6B35]" />
+                    </div>
+                )}
 
-                {/* --- SECTION 4: FEATURED --- */}
-                <motion.div
-                    variants={sectionSlideUp}
-                    initial="hidden"
-                    whileInView="visible"
-                    viewport={{ once: true, margin: "-100px" }}
-                    className="relative z-20"
-                >
-                    <FeaturedProjects onViewDetails={handleViewDetails} />
-                </motion.div>
+                {/* --- SECTION 3: THE BENTO GALLERY --- */}
+                {!loading && (
+                    <div className="relative z-10 min-h-[50vh] py-16">
+                        <ProjectGallery
+                            projects={filteredProjects}
+                            onViewDetails={handleViewDetails}
+                        />
+                    </div>
+                )}
+
+                {/* --- SECTION 4: FEATURED (Only if available) --- */}
+                {!loading && featuredProjects.length > 0 && (
+                    <motion.div
+                        variants={sectionSlideUp}
+                        initial="hidden"
+                        whileInView="visible"
+                        viewport={{ once: true, margin: "-100px" }}
+                        className="relative z-20"
+                    >
+                        {/* Pass fetched data to FeaturedProjects */}
+                        <FeaturedProjects
+                            projects={featuredProjects}
+                            onViewDetails={handleViewDetails}
+                        />
+                    </motion.div>
+                )}
 
                 {/* --- SECTION 5: CREATORS --- */}
                 <motion.div

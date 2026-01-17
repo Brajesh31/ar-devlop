@@ -1,4 +1,4 @@
-// FIX: Imported 'Variants'
+import React, { useEffect } from 'react';
 import { motion, AnimatePresence, Variants } from 'framer-motion';
 import { ShowcaseProject } from '@/data/showcase';
 import { ProjectCard } from './ProjectCard';
@@ -10,7 +10,6 @@ interface ProjectGalleryProps {
 }
 
 // --- MASTER "BUTTER-SMOOTH" VARIANTS ---
-// FIX: Explicitly typed as 'Variants'
 const containerVariants: Variants = {
   hidden: { opacity: 0 },
   visible: {
@@ -22,7 +21,6 @@ const containerVariants: Variants = {
   },
 };
 
-// FIX: Explicitly typed as 'Variants'
 const itemVariants: Variants = {
   hidden: {
     opacity: 0,
@@ -37,7 +35,6 @@ const itemVariants: Variants = {
     filter: 'blur(0px)',
     transition: {
       duration: 0.6,
-      // FIX: Added 'as const' to satisfy the Bezier Tuple requirement
       ease: [0.16, 1, 0.3, 1] as const
     },
   },
@@ -50,6 +47,40 @@ const itemVariants: Variants = {
 };
 
 export const ProjectGallery = ({ projects, onViewDetails }: ProjectGalleryProps) => {
+
+  // --- AUTO-PLAY LOGIC (MOBILE & SCROLL) ---
+  // This detects when a card is 60% visible on screen and plays the video
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((entry) => {
+            const video = entry.target.querySelector('video');
+            if (!video) return;
+
+            if (entry.isIntersecting) {
+              const playPromise = video.play();
+              if (playPromise !== undefined) {
+                playPromise.catch(() => {
+                  // Ignore auto-play errors (usually if unmuted)
+                });
+              }
+            } else {
+              video.pause();
+            }
+          });
+        },
+        { threshold: 0.6 }
+    );
+
+    // Target the specific class added to the motion div below
+    const cards = document.querySelectorAll('.gallery-card-container');
+    cards.forEach((card) => observer.observe(card));
+
+    return () => {
+      cards.forEach((card) => observer.unobserve(card));
+    };
+  }, [projects]); // Re-run when filter changes projects
+
   // --- EMPTY STATE: SYSTEM NULL ---
   if (projects.length === 0) {
     return (
@@ -135,7 +166,8 @@ export const ProjectGallery = ({ projects, onViewDetails }: ProjectGalleryProps)
                       initial="hidden"
                       animate="visible"
                       exit="exit"
-                      className="h-full"
+                      // CLASS ADDED HERE for the IntersectionObserver to find it
+                      className="h-full gallery-card-container"
                   >
                     <ProjectCard
                         project={project}

@@ -1,10 +1,10 @@
 /**
  * API Service Layer
  * Connects frontend components to PHP backend APIs using Axios
- * * STATUS: Admin Auth, Admin Events, Public Auth, Student Dashboard
+ * * STATUS: Admin Auth, Admin Events, Public Auth, Student Dashboard, SHOWCASE & LENS
  */
 
-import axios, { AxiosError, AxiosRequestConfig } from 'axios';
+import axios, { AxiosRequestConfig } from 'axios';
 import { API_CONFIG } from '@/config/api';
 
 // ============================================================================
@@ -34,6 +34,12 @@ export interface ApiResponse<T = any> {
   message?: string;
   url?: string;   // specific to upload
   count?: number;
+  // Admin List Response specific
+  meta?: {
+    count_verified: number;
+    count_guest: number;
+    filter_status?: string;
+  };
 }
 
 // Admin Login Credentials (Email only)
@@ -72,6 +78,29 @@ export interface UpcomingActivity {
   type: 'event' | 'hackathon' | 'workshop';
   date: string;
   image?: string;
+}
+
+// NEW: Showcase & Lens Item Type
+export interface ShowcaseItem {
+  submission_id: number;
+  full_name: string;
+  email: string;
+  college_name: string;
+
+  // Specific to Showcase (Video)
+  project_title?: string;
+  video_url?: string;
+
+  // Specific to Lens
+  lens_link?: string;
+  gender?: string;
+
+  // Statuses
+  account_status: 'guest' | 'verified';
+  admin_status?: 'pending' | 'approved' | 'rejected';
+  is_featured?: boolean; // For Showcase only
+
+  submitted_at: string;
 }
 
 // ============================================================================
@@ -192,9 +221,8 @@ export const adminService = {
     formData.append('file', file);
 
     try {
-      // Note: We use raw axios here for FormData, but we add credentials
       const response = await axios.post(`${API_CONFIG.baseUrl}/admin/media/upload.php`, formData, {
-        withCredentials: true // Ensure admin session is sent during upload
+        withCredentials: true
       });
       return response.data;
     } catch (error: any) {
@@ -233,6 +261,57 @@ export const adminService = {
         data: { event_id: eventId },
       });
     },
+  },
+
+  // === NEW: SHOWCASE & LENS MANAGEMENT ===
+  showcase: {
+    // 1. Fetch List (Verified vs Guest)
+    getAll: async (type: 'showcase' | 'lens', filters?: {
+      status?: string;
+      startDate?: string;
+      endDate?: string;
+    }) => {
+      const query = new URLSearchParams({
+        type,
+        status: filters?.status || 'all',
+        start_date: filters?.startDate || '2024-01-01',
+        end_date: filters?.endDate || new Date().toISOString().split('T')[0],
+      });
+
+      return apiRequest<{
+        verified_students: ShowcaseItem[];
+        guest_submissions: ShowcaseItem[];
+      }>(`/admin/showcase/list.php?${query.toString()}`);
+    },
+
+    // 2. Update Status (Approve/Reject)
+    updateStatus: async (
+        id: number,
+        type: 'showcase' | 'lens',
+        status: 'approved' | 'rejected' | 'pending'
+    ) => {
+      return apiRequest('/admin/showcase/update_status.php', {
+        method: 'POST',
+        data: { submission_id: id, type, status }
+      });
+    },
+
+    // 3. Toggle Feature (Video only)
+    toggleFeatured: async (id: number, isFeatured: boolean) => {
+      return apiRequest('/admin/showcase/update_status.php', {
+        method: 'POST',
+        data: {
+          submission_id: id,
+          type: 'showcase',
+          is_featured: isFeatured ? 1 : 0
+        }
+      });
+    },
+
+    // 4. Get CSV Export URL
+    getExportUrl: (type: 'showcase' | 'lens', startDate: string, endDate: string) => {
+      return `${API_CONFIG.baseUrl}/admin/showcase/export.php?type=${type}&start_date=${startDate}&end_date=${endDate}`;
+    }
   }
 };
 
@@ -243,24 +322,52 @@ export const adminService = {
 export const publicService = {
   events: {
     list: async () => {
-      // Read-only: No session needed
       const response = await axios.get(`${API_CONFIG.baseUrl}/events/list.php`);
       return response.data;
     },
 
     getById: async (id: string) => {
-      // Read-only: No session needed
       const response = await axios.get(`${API_CONFIG.baseUrl}/events/get.php?id=${id}`);
       return response.data;
     },
 
     register: async (data: any) => {
-      // [FIXED] Changed from raw axios.post to apiRequest
-      // This ensures 'withCredentials: true' is sent, so the server sees the logged-in user.
       return apiRequest('/events/register.php', {
         method: 'POST',
         data: data,
       });
+    }
+  },
+
+  // === NEW: SHOWCASE SUBMISSIONS ===
+  showcase: {
+    // 1. Submit Video (Multipart)
+    submitVideo: async (formData: FormData) => {
+      try {
+        const response = await axios.post(`${API_CONFIG.baseUrl}/showcase/submit.php`, formData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        return response.data;
+      } catch (error: any) {
+        return {
+          status: 'error',
+          message: error.response?.data?.message || "Video upload failed."
+        };
+      }
+    },
+
+    // 2. Submit Lens (JSON)
+    submitLens: async (data: any) => {
+      return apiRequest('/lens/submit.php', {
+        method: 'POST',
+        data: data
+      });
+    },
+
+    // 3. Get Public Gallery
+    getGallery: async () => {
+      const response = await axios.get(`${API_CONFIG.baseUrl}/showcase/get_public.php`);
+      return response.data;
     }
   }
 };

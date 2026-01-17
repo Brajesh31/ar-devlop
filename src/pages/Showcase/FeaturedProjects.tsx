@@ -1,14 +1,15 @@
-import { useRef } from 'react';
+import { useRef, useEffect } from 'react';
 import { motion, useScroll, useTransform, useSpring, Variants } from 'framer-motion';
-import { getFeaturedProjects, ShowcaseProject } from '@/data/showcase';
+import { ShowcaseProject } from '@/data/showcase';
 import { ProjectCard } from './ProjectCard';
 
+// ✅ UPDATED: Interface now accepts the projects array from the Database
 interface FeaturedProjectsProps {
+  projects: ShowcaseProject[];
   onViewDetails?: (project: ShowcaseProject) => void;
 }
 
 // --- MASTER "BUTTER-SMOOTH" VARIANTS ---
-// FIX 1: Explicitly type 'Variants' to prevent index signature errors
 const containerVariants: Variants = {
   hidden: { opacity: 0 },
   visible: {
@@ -36,14 +37,12 @@ const card3DVariants: Variants = {
     rotateX: 0,
     transition: {
       duration: 0.8,
-      // FIX 2: Use 'as const' to tell TS this is a Bezier tuple, not a generic number[]
       ease: [0.16, 1, 0.3, 1] as const
     },
   },
 };
 
-export const FeaturedProjects = ({ onViewDetails }: FeaturedProjectsProps) => {
-  // --- 1. HOOKS FIRST (Always execute hooks before returns) ---
+export const FeaturedProjects = ({ projects, onViewDetails }: FeaturedProjectsProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
 
   // High-Performance Scroll Physics
@@ -62,14 +61,48 @@ export const FeaturedProjects = ({ onViewDetails }: FeaturedProjectsProps) => {
 
   // Optimized Transforms
   const yBg = useTransform(smoothY, [0, 1], [0, -80]);
-  // Note: 'rotateMesh' was unused in your JSX, so I removed it to prevent lint warnings.
   const ySecondary = useTransform(smoothY, [0, 1], [0, 60]);
 
-  // --- 2. DATA FETCHING ---
-  const featured = getFeaturedProjects();
+  // --- AUTO-PLAY LOGIC (MOBILE & SCROLL) ---
+  useEffect(() => {
+    // Only run this logic to auto-play videos that scroll into view
+    const observer = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((entry) => {
+            // Find the video element inside the card
+            const video = entry.target.querySelector('video');
+            if (!video) return;
 
-  // --- 3. CONDITIONAL RENDER (Only SAFE after hooks) ---
-  if (featured.length === 0) return null;
+            if (entry.isIntersecting) {
+              // Play when in view (browser requires muted=true for this to work)
+              const playPromise = video.play();
+              if (playPromise !== undefined) {
+                playPromise.catch(() => {
+                  // Auto-play was prevented (usually if unmuted or battery saver)
+                });
+              }
+            } else {
+              // Pause when out of view to save resources
+              video.pause();
+            }
+          });
+        },
+        {
+          threshold: 0.6 // Play when 60% of the card is visible
+        }
+    );
+
+    // Observe all project cards
+    const cards = document.querySelectorAll('.project-card-container');
+    cards.forEach((card) => observer.observe(card));
+
+    return () => {
+      cards.forEach((card) => observer.unobserve(card));
+    };
+  }, [projects]); // Re-run if data changes
+
+  // ✅ CONDITIONAL RENDER: Hide section if no data passed
+  if (!projects || projects.length === 0) return null;
 
   return (
       <section ref={containerRef} className="relative py-8 md:py-12 overflow-hidden bg-slate-50 perspective-2000 transform-gpu">
@@ -97,7 +130,6 @@ export const FeaturedProjects = ({ onViewDetails }: FeaturedProjectsProps) => {
               initial={{ opacity: 0, x: -40, filter: 'blur(8px)' }}
               whileInView={{ opacity: 1, x: 0, filter: 'blur(0px)' }}
               viewport={{ once: true, margin: "-50px" }}
-              // FIX 3: Added 'as const' here too for safety
               transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] as const }}
               className="mb-8 max-w-4xl"
           >
@@ -117,7 +149,8 @@ export const FeaturedProjects = ({ onViewDetails }: FeaturedProjectsProps) => {
               whileInView="visible"
               viewport={{ once: true, margin: "-50px" }}
           >
-            {featured.slice(0, 3).map((project, index) => (
+            {/* ✅ USE PROPS DATA INSTEAD OF STATIC FILE */}
+            {projects.slice(0, 3).map((project, index) => (
                 <motion.div
                     key={project.id}
                     variants={card3DVariants}
@@ -127,7 +160,7 @@ export const FeaturedProjects = ({ onViewDetails }: FeaturedProjectsProps) => {
                       rotateY: 2,
                       transition: { type: "spring", stiffness: 150, damping: 15 }
                     }}
-                    className="relative group h-full preserve-3d will-change-transform"
+                    className="relative group h-full preserve-3d will-change-transform project-card-container"
                 >
                   {/* Floating Rank Badge */}
                   <div className="absolute -top-4 -right-4 z-30 transform-gpu group-hover:translate-y-[-5px] transition-transform duration-500">

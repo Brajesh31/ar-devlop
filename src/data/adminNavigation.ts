@@ -29,7 +29,8 @@ import {
     Smartphone,
     MousePointer,
     UserCheck,
-    Cpu
+    Cpu,
+    Link // Added for Lens Submissions
 } from 'lucide-react';
 
 export interface NavItem {
@@ -116,8 +117,8 @@ export const adminNavigation: NavItem[] = [
         icon: Calendar,
         items: [
             { title: "Create Event", url: "/admin/events/create", icon: PlusCircle },
-            { title: "View All Events", url: "/admin/events", icon: List }, // ✅ Fixed URL
-            { title: "Overall Analytics", url: "/admin/events/analytics", icon: BarChart2 }, // ✅ Renamed for clarity
+            { title: "View All Events", url: "/admin/events", icon: List },
+            { title: "Overall Analytics", url: "/admin/events/analytics", icon: BarChart2 },
             { title: "Event Posts", url: "/admin/events/posts" },
             { title: "Speakers", url: "/admin/events/speakers" },
             { title: "Forms & Feedback", url: "/admin/events/forms" },
@@ -150,13 +151,21 @@ export const adminNavigation: NavItem[] = [
         ]
     },
     {
-        title: "Showcase",
+        title: "Showcase (Videos)",
         icon: MonitorPlay,
         items: [
             { title: "Pending Approvals", url: "/admin/showcase/pending", icon: Clock },
             { title: "Approved Projects", url: "/admin/showcase/approved", icon: CheckCircle },
-            { title: "Rejected Projects", url: "/admin/showcase/rejected", icon: XCircle },
             { title: "Main Page Video", url: "/admin/showcase/main-video", icon: Video },
+        ]
+    },
+    {
+        title: "Lens Submissions",
+        icon: Link,
+        items: [
+            { title: "Verified Lenses", url: "/admin/lens/verified", icon: UserCheck },
+            { title: "Guest Lenses", url: "/admin/lens/guest", icon: Globe },
+            { title: "Export Data", url: "/admin/lens/export", icon: FileText },
         ]
     },
     {

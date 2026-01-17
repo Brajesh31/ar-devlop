@@ -6,6 +6,7 @@
 export type ProjectCategory = 'ar' | 'vr' | 'webar' | 'snapar' | 'hackathon' | 'workshop';
 
 export interface ShowcaseProject {
+  videoUrl: any;
   id: string;
   title: string;
   description: string;

@@ -5,8 +5,7 @@ import {
 } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { ExternalLink, X, Zap, User, Calendar, Sparkles, Hash } from 'lucide-react';
-// FIX: Imported 'Variants' for strict typing
+import { ExternalLink, X, Zap, User, Calendar, Sparkles, Hash, Play } from 'lucide-react';
 import { motion, AnimatePresence, Variants } from 'framer-motion';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
@@ -23,10 +22,10 @@ const categoryLabels: Record<string, string> = {
   snapar: 'SnapAR',
   hackathon: 'Hackathon',
   workshop: 'Workshop',
+  student: 'Student'
 };
 
 // --- FRAMER VARIANTS ---
-// FIX: Explicitly typed as 'Variants' to fix TS2322 error
 const modalVariants: Variants = {
   hidden: { opacity: 0, scale: 0.95, y: 20 },
   visible: {
@@ -79,38 +78,55 @@ export const ProjectDetailModal = ({ project, open, onClose }: ProjectDetailModa
 
                   <div className="relative z-10 flex flex-col max-h-[90vh]">
 
-                    {/* --- HEADER: HOLOGRAPHIC HERO --- */}
-                    <div className="relative h-64 md:h-80 overflow-hidden shrink-0">
-                      {/* Background Mesh */}
-                      <div className="absolute inset-0 bg-gradient-to-br from-slate-100 to-slate-200" />
-                      <div className="absolute inset-0 bg-gradient-to-tr from-[#3B82F6]/10 via-[#FF6B35]/10 to-[#10B981]/10 opacity-60 animate-pulse" />
+                    {/* --- HEADER: VIDEO OR HOLOGRAPHIC HERO --- */}
+                    <div className="relative h-64 md:h-96 overflow-hidden shrink-0 bg-slate-900">
 
-                      {/* Scanning Line Effect */}
-                      <motion.div
-                          animate={{ top: ['0%', '100%', '0%'] }}
-                          transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
-                          className="absolute left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-[#FF6B35]/50 to-transparent blur-sm"
-                      />
+                      {project.videoUrl ? (
+                          /* VIDEO PLAYER */
+                          <div className="absolute inset-0 w-full h-full flex items-center justify-center bg-black">
+                            <video
+                                src={project.videoUrl}
+                                className="w-full h-full object-contain"
+                                controls
+                                autoPlay
+                                playsInline
+                            />
+                          </div>
+                      ) : (
+                          /* HOLOGRAPHIC FALLBACK */
+                          <>
+                            {/* Background Mesh */}
+                            <div className="absolute inset-0 bg-gradient-to-br from-slate-100 to-slate-200" />
+                            <div className="absolute inset-0 bg-gradient-to-tr from-[#3B82F6]/10 via-[#FF6B35]/10 to-[#10B981]/10 opacity-60 animate-pulse" />
 
-                      {/* Icon Visual */}
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <motion.div
-                            initial={{ scale: 0.5, opacity: 0 }}
-                            animate={{ scale: 1, opacity: 1 }}
-                            transition={{ type: "spring", stiffness: 200, delay: 0.1 }}
-                            className="text-9xl filter drop-shadow-2xl select-none"
-                        >
-                          {project.categories.includes('vr') ? '🥽' : project.categories.includes('snapar') ? '📱' : '🔮'}
-                        </motion.div>
-                      </div>
+                            {/* Scanning Line Effect */}
+                            <motion.div
+                                animate={{ top: ['0%', '100%', '0%'] }}
+                                transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
+                                className="absolute left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-[#FF6B35]/50 to-transparent blur-sm"
+                            />
 
-                      {/* Glass Texture */}
-                      <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-10 mix-blend-overlay" />
+                            {/* Icon Visual */}
+                            <div className="absolute inset-0 flex items-center justify-center">
+                              <motion.div
+                                  initial={{ scale: 0.5, opacity: 0 }}
+                                  animate={{ scale: 1, opacity: 1 }}
+                                  transition={{ type: "spring", stiffness: 200, delay: 0.1 }}
+                                  className="text-9xl filter drop-shadow-2xl select-none"
+                              >
+                                {project.categories.includes('vr') ? '🥽' : project.categories.includes('snapar') ? '📱' : '🔮'}
+                              </motion.div>
+                            </div>
+
+                            {/* Glass Texture */}
+                            <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-10 mix-blend-overlay" />
+                          </>
+                      )}
 
                       {/* Floating ID Badge */}
-                      <div className="absolute bottom-6 left-6 flex gap-2">
+                      <div className="absolute bottom-6 left-6 flex gap-2 pointer-events-none">
                         <Badge className="bg-white/90 backdrop-blur-md text-slate-900 border-none px-4 py-1.5 text-[10px] font-black uppercase tracking-widest shadow-lg">
-                          PROJECT_ID_0{Math.floor(Math.random() * 99)}
+                          ID: {project.id}
                         </Badge>
                       </div>
                     </div>
@@ -130,7 +146,7 @@ export const ProjectDetailModal = ({ project, open, onClose }: ProjectDetailModa
                             {project.categories.map((cat) => (
                                 <div key={cat} className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
                                   <Hash size={10} className="text-[#FF6B35]" />
-                                  <span className="text-[10px] font-bold uppercase tracking-widest">{categoryLabels[cat]}</span>
+                                  <span className="text-[10px] font-bold uppercase tracking-widest">{categoryLabels[cat] || cat}</span>
                                 </div>
                             ))}
                           </div>
