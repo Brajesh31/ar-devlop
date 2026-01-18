@@ -21,7 +21,7 @@ if (empty($input['id'])) {
 }
 
 try {
-    // 1. Get Slug to find the potential "Rogue Table"
+    // 1. Get Slug to find potential "Rogue Legacy Tables"
     $stmt = $conn->prepare("SELECT slug FROM hackathons WHERE id = :id");
     $stmt->execute([':id' => $input['id']]);
     $hackathon = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -30,7 +30,7 @@ try {
         $slug = $hackathon['slug'];
 
         // 2. CLEANUP: Drop the specific legacy table if it exists
-        // (This handles the "Separate Table" architecture artifacts)
+        // (This fixes your issue where the table wasn't being deleted)
         $tableName = "participants_" . str_replace('-', '_', $slug);
 
         // Safety check: Never drop the unified table
@@ -40,12 +40,11 @@ try {
     }
 
     // 3. DELETE: Remove from master table
-    // ON DELETE CASCADE in your DB should handle the related rows in hackathon_participants
     $deleteStmt = $conn->prepare("DELETE FROM hackathons WHERE id = :id");
     $deleteStmt->execute([':id' => $input['id']]);
 
     if ($deleteStmt->rowCount() > 0) {
-        echo json_encode(["status" => "success", "message" => "Hackathon and associated data deleted"]);
+        echo json_encode(["status" => "success", "message" => "Hackathon and associated legacy data deleted"]);
     } else {
         http_response_code(404);
         echo json_encode(["status" => "error", "message" => "Hackathon not found"]);
